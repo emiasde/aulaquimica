@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mesa de Síntese 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: mesa 3D ocupa a tela; tabela de apoio à direita; paleta e professor embaixo. */
+:root{
+  --bg:#0a1320; --panel:#12233a; --panel2:#1a3050; --line:#2b4a70;
+  --ink:#eaf1fa; --mute:#93a8c3; --accent:#ffb347; --ok:#5fd38d; --bad:#ff6b6b;
+  --disp:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);height:100%}
+header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-family:var(--disp);font-size:1.05rem;margin:0;font-weight:800;flex:1;min-width:140px}
+.pill{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:.8rem}
+.pill.b{cursor:pointer;color:var(--accent);border-color:var(--accent)}
+.pill.b:hover{background:#243d60}
+main{position:relative;display:flex;min-height:0}
+#view{position:relative;flex:1;min-width:0}
+canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none}
+#req{position:absolute;left:10px;top:10px;background:#0a1320dd;border:1px solid var(--accent);border-radius:12px;padding:8px 12px;max-width:min(320px,70%)}
+#req .t{font-size:.72rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+#req .n{font-family:var(--disp);font-size:1.25rem;font-weight:800}
+#req .f{font-family:var(--mono);font-size:.82rem;color:var(--accent);margin-top:2px;min-height:1.1em}
+#cur{position:absolute;left:10px;bottom:10px;background:#0a1320dd;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-family:var(--mono);font-size:.85rem;max-width:calc(100% - 20px);overflow-wrap:anywhere}
+#side{width:340px;max-width:92vw;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:10px 12px;display:none}
+#side.on{display:block}
+@media(max-width:780px){#side{position:absolute;right:0;top:0;bottom:0;z-index:4;box-shadow:-8px 0 24px #000a}}
+#side h3{font-family:var(--disp);margin:10px 0 4px;font-size:.95rem}
+.tb{width:100%;border-collapse:collapse;font-size:.74rem;margin:2px 0 6px}
+.tb th{background:var(--panel2);text-align:left;padding:4px 6px;font-family:var(--disp)}
+.tb td{padding:3px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tb td.m{font-family:var(--mono);color:var(--accent)}
+.tb tr.hl td{background:#ffb34730;font-weight:600}
+.tb tr.hl td:first-child{box-shadow:inset 4px 0 0 var(--accent)}
+.pf{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;font-size:.72rem;text-align:center}
+.pf div{background:var(--panel2);border-radius:6px;padding:3px 0}.pf b{display:block;font-family:var(--mono);color:var(--accent)}
+.note{background:var(--panel2);border-left:4px solid var(--accent);border-radius:8px;padding:6px 10px;font-size:.78rem;margin:4px 0}
+footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;display:flex;flex-direction:column;gap:8px}
+#tutor{display:flex;gap:10px;align-items:flex-start}
+.av{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#2a1a00;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:800;font-size:1.3rem;border:3px solid #ffd88a}
+.av.talk{animation:talk .5s infinite alternate}
+@keyframes talk{to{transform:scale(1.1)}}
+#bub{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:.92rem;line-height:1.4;min-height:48px;max-height:96px;overflow:auto}
+#bub.bad{border-color:var(--bad)}#bub.ok{border-color:var(--ok)}
+.tbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tool{background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:6px 12px;font-family:var(--mono);font-weight:600;min-width:46px}
+.tool[aria-pressed=true]{border-color:var(--accent);background:#3a2c14;color:var(--accent)}
+.tool.C{border-bottom:4px solid #6b717b}.tool.O{border-bottom:4px solid #e8423c}.tool.N{border-bottom:4px solid #3b6fe8}.tool.g{border-bottom:4px solid #5fd38d}
+.sep{width:1px;height:28px;background:var(--line);margin:0 4px}
+.act{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:.85rem}
+.act:hover{border-color:var(--accent)}
+.go{background:var(--accent);color:#2a1a00;border:0;font-family:var(--disp);font-weight:800;padding:8px 18px;border-radius:10px}
+#ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#050b14e6;padding:12px;z-index:6}
+#ov.on{display:flex}
+.card{background:var(--panel);border:2px solid var(--accent);border-radius:16px;max-width:600px;width:100%;max-height:100%;overflow:auto;padding:16px 18px}
+.card h2{font-family:var(--disp);margin:0 0 6px;font-size:1.4rem;font-weight:800}
+.card p{margin:6px 0;font-size:.92rem;line-height:1.45}
+.lv{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}
+.lv button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:left;font-size:.8rem}
+.lv button b{display:block;font-family:var(--disp)}
+.lv button:disabled{opacity:.35;cursor:not-allowed}
+.lv button:hover:not(:disabled){border-color:var(--accent)}
+.stars{color:var(--accent);letter-spacing:2px}
+.mute{color:var(--mute)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Mesa de Síntese 3D</h1>
+    <span class="pill" id="pl">Fase 1</span>
+    <span class="pill stars" id="ps"></span>
+    <button class="pill b" id="bt">Tabela</button>
+    <button class="pill b" id="bm">Fases</button>
+  </header>
+  <main>
+    <div id="view">
+      <div id="req"><div class="t">Pedido</div><div class="n" id="rn"></div><div class="t" id="rf"></div><div class="f" id="rfo"></div></div>
+      <div id="cur"></div>
+      <div id="ov"><div class="card" id="card"></div></div>
+    </div>
+    <aside id="side"></aside>
+  </main>
+  <footer>
+    <div id="tutor"><div class="av" id="av">C</div><div id="bub">Carregando o laboratório...</div></div>
+    <div class="tbar" id="tbar">
+      <button class="tool C" data-t="C" aria-pressed="true">C</button>
+      <button class="tool O" data-t="O" aria-pressed="false">O</button>
+      <button class="tool N" data-t="N" aria-pressed="false">N</button>
+      <span class="sep"></span>
+      <button class="tool g" data-t="OH" aria-pressed="false">–OH</button>
+      <button class="tool g" data-t="=O" aria-pressed="false">=O</button>
+      <button class="tool g" data-t="NH2" aria-pressed="false">–NH₂</button>
+      <button class="tool g" data-t="Cl" aria-pressed="false">–Cl</button>
+      <span class="sep"></span>
+      <button class="tool" data-t="bond" aria-pressed="false">Ligação ⟳</button>
+      <button class="tool" data-t="del" aria-pressed="false">Apagar</button>
+      <span class="sep"></span>
+      <button class="go" id="bv">Verificar</button>
+      <button class="act" id="bh">Dica</button>
+      <button class="act" id="br">Repetir voz</button>
+      <button class="act" id="bs">Voz: ligada</button>
+      <button class="act" id="bc">Limpar mesa</button>
+    </div>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ===================== QUÍMICA ===================== */
+const EL={C:{v:4,col:0x434a55,r:.42,n:'carbono'},O:{v:2,col:0xe8423c,r:.38,n:'oxigênio'},N:{v:3,col:0x3b6fe8,r:.38,n:'nitrogênio'},H:{v:1,col:0xf4f6f9,r:.24},Cl:{v:1,col:0x3ddc6a,r:.46}};
+const SUBS={'OH':{cost:1,el:'O',h:1,label:'OH'},'=O':{cost:2,el:'O',h:0,label:'=O'},'NH2':{cost:1,el:'N',h:2,label:'NH₂'},'Cl':{cost:1,el:'Cl',h:0,label:'Cl'},'≡N':{cost:3,el:'N',h:0,label:'≡N'}};
+const MAXA=5;
+const sub=n=>String(n).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[d]);
+const cost=a=>a.subs.reduce((s,x)=>s+SUBS[x].cost,0);
+function usedOf(S,i){let u=cost(S.atoms[i]);if(i>0)u+=S.bonds[i-1];if(i<S.atoms.length-1)u+=S.bonds[i];return u}
+function freeOf(S,i){return EL[S.atoms[i].el].v-usedOf(S,i)}
+function clone(S){return{atoms:S.atoms.map(a=>({el:a.el,subs:a.subs.slice()})),bonds:S.bonds.slice()}}
+/* terminais O/N viram grupos: C–O = –OH, C=O, C–N = –NH2, C≡N */
+function norm(S){
+  const R=clone(S);let ch=true;
+  while(ch&&R.atoms.length>=2){
+    ch=false;
+    for(const end of ['last','first']){
+      const i=end==='last'?R.atoms.length-1:0,a=R.atoms[i];
+      if(R.atoms.length<2||(a.el!=='O'&&a.el!=='N')||a.subs.length)continue;
+      const bi=end==='last'?R.bonds[R.bonds.length-1]:R.bonds[0],j=end==='last'?i-1:i+1;
+      let g=null;
+      if(a.el==='O')g=bi===1?'OH':bi===2?'=O':null;
+      else g=bi===1?'NH2':bi===3?'≡N':null;
+      if(!g)continue;
+      R.atoms[j].subs.push(g);
+      if(end==='last'){R.atoms.pop();R.bonds.pop()}else{R.atoms.shift();R.bonds.shift()}
+      ch=true;break;
+    }
+  }
+  return R;
+}
+const ORD=['=O','OH','NH2','Cl','≡N'];
+function fmt(S){
+  const n=S.atoms.length,out=[];
+  for(let i=0;i<n;i++){
+    const a=S.atoms[i],term=(i===0||i===n-1),subs=a.subs.slice().sort((x,y)=>ORD.indexOf(x)-ORD.indexOf(y));
+    const h=EL[a.el].v-usedOf(S,i);let t='';
+    if(a.el==='C'){
+      if(subs.includes('=O')){
+        if(subs.includes('OH'))t='COOH';else if(subs.includes('NH2'))t='CONH₂';else if(term&&h>0)t='CHO';else t='CO';
+      }else if(subs.includes('≡N'))t='C≡N';
+      else{
+        t='C'+(h>0?'H'+(h>1?sub(h):''):'');
+        if(subs.length){const l=subs.map(s=>SUBS[s].label);t+=(term&&l.length===1)?'–'+l[0]:l.map(x=>'('+x+')').join('')}
+      }
+    }else if(a.el==='O')t='O';
+    else if(a.el==='N')t='N'+(h>0?'H'+(h>1?sub(h):''):'');
+    out.push(t);
+    if(i<n-1)out.push(['','–','=','≡'][S.bonds[i]]);
+  }
+  return out.join('');
+}
+function canon(S){
+  const N=norm(S);
+  const rev={atoms:N.atoms.slice().reverse(),bonds:N.bonds.slice().reverse()};
+  const a=fmt(N),b=fmt(rev);return a<b?a:b;
+}
+const FN={alcano:'alcano',alceno:'alceno',alcino:'alcino',alcool:'álcool',aldeido:'aldeído',cetona:'cetona',acido:'ácido carboxílico',ester:'éster',eter:'éter',amina:'amina',amida:'amida',nitrila:'nitrila',haleto:'haleto orgânico'};
+const FROW={alcano:'Alcano',alceno:'Alceno',alcino:'Alcino',alcool:'Álcool',aldeido:'Aldeído',cetona:'Cetona',acido:'Ácido carboxílico',ester:'Éster',eter:'Éter',amina:'Amina',amida:'Amida',nitrila:'Nitrila',haleto:'Haleto'};
+const FVOZ={
+ alcano:'Um alcano tem só ligações simples entre os carbonos.',
+ alceno:'Um alceno tem uma ligação dupla entre dois carbonos.',
+ alcool:'Um álcool tem o grupo hidroxila, O H, ligado a um carbono que só faz ligações simples.',
+ aldeido:'Um aldeído tem a carbonila, C dupla O, na ponta da cadeia, com um hidrogênio no mesmo carbono.',
+ cetona:'Uma cetona tem a carbonila, C dupla O, no meio da cadeia, entre dois carbonos.',
+ acido:'Um ácido carboxílico tem carbonila e hidroxila no mesmo carbono, na ponta da cadeia.',
+ ester:'Um éster tem uma carbonila e um oxigênio ligado a outro carbono: o grupo C O O no meio da cadeia.',
+ eter:'Um éter tem um oxigênio ligado a dois carbonos, sem hidrogênio no oxigênio.',
+ amina:'Uma amina tem nitrogênio ligado a carbono, sem carbonila.',
+ amida:'Uma amida tem a carbonila ligada a um nitrogênio.',
+ nitrila:'Uma nitrila tem o grupo C tripla N na ponta da cadeia.',
+ haleto:'Um haleto orgânico tem um halogênio, como o cloro, ligado a carbono.'
+};
+const PRI=['acido','ester','amida','nitrila','aldeido','cetona','alcool','amina','eter','haleto','alcino','alceno'];
+function detect(S0){
+  const S=norm(S0),n=S.atoms.length,set=new Set();
+  const hasCO=j=>S.atoms[j].subs.includes('=O');
+  for(let i=0;i<n;i++){
+    const a=S.atoms[i],nb=[];if(i>0)nb.push(i-1);if(i<n-1)nb.push(i+1);
+    if(a.el==='C'){
+      const co=a.subs.includes('=O');
+      if(co){
+        const nN=nb.some(j=>S.atoms[j].el==='N'),nO=nb.some(j=>S.atoms[j].el==='O');
+        if(a.subs.includes('OH'))set.add('acido');
+        else if(a.subs.includes('NH2')||nN)set.add('amida');
+        else if(nO)set.add('ester');
+        else if(nb.length<=1)set.add('aldeido');
+        else set.add('cetona');
+      }else{
+        if(a.subs.includes('≡N'))set.add('nitrila');
+        if(a.subs.includes('OH'))set.add('alcool');
+        if(a.subs.includes('NH2'))set.add('amina');
+        if(a.subs.includes('Cl'))set.add('haleto');
+      }
+    }else if(a.el==='O'&&nb.length===2){
+      if(!nb.some(hasCO))set.add('eter');
+    }else if(a.el==='N'&&nb.length===2){
+      if(!nb.some(hasCO))set.add('amina');
+    }
+    if(i<n-1&&a.el==='C'&&S.atoms[i+1].el==='C'){if(S.bonds[i]===2)set.add('alceno');if(S.bonds[i]===3)set.add('alcino')}
+  }
+  for(const k of PRI)if(set.has(k))return k;
+  return 'alcano';
+}
+const carbons=S=>norm(S).atoms.filter(a=>a.el==='C').length;
+function overflow(S){const r=[];S.atoms.forEach((a,i)=>{if(usedOf(S,i)>EL[a.el].v)r.push(i)});return r}
+const PFXN=['','met','et','prop','but','pent','hex'];
+const NUMW=['zero','um','dois','três','quatro','cinco','seis'];
+function falaFormula(f){
+  return f.replace(/[₀-₉]/g,d=>' '+NUMW[d.charCodeAt(0)-8320]+' ').replace(/–/g,', ').replace(/=/g,' dupla ').replace(/≡/g,' tripla ').replace(/[()]/g,' ').replace(/([A-Z][a-z]?)/g,' $1 ').replace(/\s+/g,' ').trim();
+}
+
+/* ===================== FASES ===================== */
+const mk=(atoms,bonds,subs)=>({atoms:atoms.map((el,i)=>({el,subs:(subs&&subs[i])||[]})),bonds});
+const LV=[
+ {n:'Etano',art:'o etano',fala:'etano',fn:'alcano',S:mk(['C','C'],[1]),how:'Clique em C na paleta e depois na mesa para colocar um carbono. Faça isso duas vezes. Os hidrogênios se completam sozinhos, porque cada carbono faz quatro ligações. Depois clique em Verificar.',ok:'O etano tem dois carbonos, prefixo et, e só ligações simples, infixo an, por isso termina em ano.'},
+ {n:'Eteno',art:'o eteno',fala:'eteno',fn:'alceno',S:mk(['C','C'],[2]),how:'Coloque dois carbonos. Depois escolha a ferramenta Ligação e clique no traço entre eles para torná-la dupla.',ok:'No eteno a dupla ligação muda o infixo de an para en. Cada carbono ficou com dois hidrogênios.'},
+ {n:'Etanol',art:'o etanol',fala:'etanol',fn:'alcool',S:mk(['C','C'],[1],[[],['OH']]),how:'Coloque dois carbonos, com ligação simples. Escolha a peça O H e clique em um dos carbonos.',ok:'O sufixo ol indica o grupo hidroxila. O carbono com O H perdeu um hidrogênio para manter as quatro ligações.'},
+ {n:'Propan-2-ol',art:'o propan-2-ol',fala:'propan dois ol',fn:'alcool',S:mk(['C','C','C'],[1,1],[[],['OH'],[]]),how:'Use três carbonos. O número dois no nome diz que o O H fica no carbono do meio.',ok:'O número 2 mostra a posição do O H. Esse é um álcool secundário, porque o carbono do O H liga a dois outros carbonos.'},
+ {n:'Etanal',art:'o etanal',fala:'etanal',fn:'aldeido',S:mk(['C','C'],[1],[[],['=O']]),how:'Coloque dois carbonos e a peça dupla O em um carbono da ponta.',ok:'A carbonila na ponta da cadeia, com um hidrogênio, é o aldeído. O sufixo é al.'},
+ {n:'Propanona',art:'a propanona',fala:'propanona',fn:'cetona',S:mk(['C','C','C'],[1,1],[[],['=O'],[]]),how:'Use três carbonos e ponha a peça dupla O no carbono do meio.',ok:'A carbonila entre dois carbonos é a cetona. O sufixo é ona. Essa é a acetona do removedor de esmalte.'},
+ {n:'Ácido etanoico',art:'o ácido etanoico',fala:'ácido etanoico',fn:'acido',S:mk(['C','C'],[1],[[],['=O','OH']]),how:'Use dois carbonos. No mesmo carbono da ponta, coloque a peça dupla O e também a peça O H.',ok:'Carbonila mais hidroxila no mesmo carbono formam o grupo C O O H, o ácido carboxílico. É o ácido do vinagre.'},
+ {n:'Etanoato de metila',art:'o etanoato de metila',fala:'etanoato de metila',fn:'ester',S:mk(['C','C','O','C'],[1,1,1],[[],['=O'],[],[]]),how:'Coloque, nesta ordem: um carbono, outro carbono, um oxigênio e mais um carbono. Depois ponha a peça dupla O no segundo carbono. O oxigênio do meio liga a carbonila ao grupo metila.',ok:'O éster vem de um ácido mais um álcool. A parte etanoato é do ácido, e a parte metila é do álcool.'},
+ {n:'Metoxi-metano',art:'o metoxi-metano',fala:'metóxi metano',fn:'eter',S:mk(['C','O','C'],[1,1]),how:'Coloque um carbono, o oxigênio e outro carbono, nessa ordem. O oxigênio fica no meio, só com as duas ligações.',ok:'O éter tem oxigênio entre dois carbonos, sem hidrogênio no oxigênio. Ele é isômero do etanol, com a mesma fórmula C dois H seis O.'},
+ {n:'Etilamina',art:'a etilamina',fala:'etilamina',fn:'amina',S:mk(['C','C'],[1],[[],['NH2']]),how:'Coloque dois carbonos e a peça N H dois em um deles.',ok:'A amina vem da amônia: o nitrogênio faz três ligações. Aqui ele ficou com dois hidrogênios e um carbono.'},
+ {n:'Etanamida',art:'a etanamida',fala:'etanamida',fn:'amida',S:mk(['C','C'],[1],[[],['=O','NH2']]),how:'Use dois carbonos. No carbono da ponta, ponha a peça dupla O e a peça N H dois.',ok:'Carbonila ligada a nitrogênio é uma amida. É a mesma ligação que une os aminoácidos nas proteínas.'},
+ {n:'Etanonitrila',art:'a etanonitrila',fala:'etano nitrila',fn:'nitrila',S:mk(['C','C','N'],[1,3]),how:'Coloque dois carbonos e depois o átomo N. Use a ferramenta Ligação para fazer uma ligação tripla entre o último carbono e o nitrogênio.',ok:'A nitrila tem carbono com ligação tripla ao nitrogênio. Os três do triplo usam todas as ligações do N.'},
+ {n:'Cloroetano',art:'o cloroetano',fala:'cloroetano',fn:'haleto',S:mk(['C','C'],[1],[[],['Cl']]),how:'Coloque dois carbonos e a peça C L em um deles.',ok:'O cloro substitui um hidrogênio. O haleto orgânico recebe o prefixo cloro no nome.'}
+];
+LV.forEach(l=>{l.canon=canon(l.S);l.nc=carbons(l.S)});
+
+/* ===================== ESTADO ===================== */
+let li=0,M={atoms:[],bonds:[]},tool='C',wrong=0,revealed=false,hints=0,done=false;
+let SAVE={stars:[]};
+try{const v=JSON.parse(localStorage.getItem('mesa3d-v1')||'null');if(v&&Array.isArray(v.stars))SAVE=v}catch(e){}
+const persist=()=>{try{localStorage.setItem('mesa3d-v1',JSON.stringify(SAVE))}catch(e){}};
+const $=id=>document.getElementById(id);
+const fresh=new Set();
+
+/* ===================== VOZ ===================== */
+let voiceOn=true,lastSay='',voice=null,lastWarn=0;
+function pickVoice(){
+  try{const vs=speechSynthesis.getVoices();voice=vs.find(v=>/pt[-_]BR/i.test(v.lang))||vs.find(v=>/^pt/i.test(v.lang))||null}catch(e){}
+}
+try{pickVoice();speechSynthesis.onvoiceschanged=pickVoice}catch(e){}
+function say(voz,text,cls){
+  lastSay=voz;
+  const b=$('bub');b.textContent=text||voz;b.className=cls||'';
+  speak(voz);
+}
+function speak(t){
+  if(!voiceOn)return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';u.rate=1.02;if(voice)u.voice=voice;
+    u.onstart=()=>$('av').classList.add('talk');u.onend=u.onerror=()=>$('av').classList.remove('talk');
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ===================== TABELA ===================== */
+const TAB=[
+ ['Alcano','C–C simples','-ano','CH₃–CH₃ (etano)'],['Alceno','C=C','-eno','CH₂=CH₂ (eteno)'],['Alcino','C≡C','-ino','CH≡CH (etino)'],
+ ['Álcool','–OH em C saturado','-ol','CH₃–CH₂–OH (etanol)'],['Aldeído','–CHO (ponta)','-al','CH₃–CHO (etanal)'],['Cetona','–CO– (meio)','-ona','CH₃–CO–CH₃ (propanona)'],
+ ['Ácido carboxílico','–COOH','ácido -óico','CH₃–COOH (ác. etanoico)'],['Éster','–COO– entre C','-oato de -ila','CH₃–CO–O–CH₃ (etanoato de metila)'],
+ ['Éter','–O– entre C','alcóxi-alcano','CH₃–O–CH₃ (metoxi-metano)'],['Amina','N ligado a C','-amina','CH₃–CH₂–NH₂ (etilamina)'],
+ ['Amida','–CO–N','-amida','CH₃–CO–NH₂ (etanamida)'],['Nitrila','–C≡N','-nitrila','CH₃–C≡N (etanonitrila)'],['Haleto','–Cl, –Br','cloro-, bromo-','CH₃–CH₂–Cl (cloroetano)']
+];
+function renderSide(){
+  const hl=FROW[LV[li].fn];
+  $('side').innerHTML=`<h3 style="margin-top:0">Valências (ligações de cada átomo)</h3>
+   <table class="tb"><tr><th>Átomo</th><th>Faz</th><th>Cor</th></tr>
+   <tr><td>C carbono</td><td class="m">4 ligações</td><td>cinza</td></tr>
+   <tr><td>O oxigênio</td><td class="m">2 ligações</td><td>vermelho</td></tr>
+   <tr><td>N nitrogênio</td><td class="m">3 ligações</td><td>azul</td></tr>
+   <tr><td>H hidrogênio</td><td class="m">1 ligação</td><td>branco (automático)</td></tr>
+   <tr><td>Cl cloro</td><td class="m">1 ligação</td><td>verde</td></tr></table>
+   <div class="note"><b>Nome = prefixo + infixo + sufixo.</b> Prefixo: nº de carbonos. Infixo: ligações. Sufixo: função.</div>
+   <h3>Prefixos</h3><div class="pf">${[['met',1],['et',2],['prop',3],['but',4],['pent',5],['hex',6],['hept',7],['oct',8],['non',9],['dec',10]].map(x=>`<div><b>${x[0]}</b>${x[1]} C</div>`).join('')}</div>
+   <h3>Infixos</h3><table class="tb"><tr><th>Ligações</th><th>Infixo</th></tr><tr><td>só simples</td><td class="m">an</td></tr><tr><td>1 dupla</td><td class="m">en</td></tr><tr><td>1 tripla</td><td class="m">in</td></tr></table>
+   <h3>Funções e sufixos</h3><table class="tb"><tr><th>Função</th><th>Grupo</th><th>Sufixo</th><th>Exemplo</th></tr>
+   ${TAB.map(r=>`<tr class="${r[0]===hl?'hl':''}"><td>${r[0]}</td><td class="m">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</table>
+   <h3>Peças</h3><div class="note"><b>C, O, N</b>: átomos da cadeia (clique na mesa). <b>–OH, =O, –NH₂, –Cl</b>: grupos (clique em um átomo). <b>Ligação ⟳</b>: clique no traço para simples, dupla ou tripla. Os hidrogênios completam sozinhos.</div>`;
+}
+
+/* ===================== OPERAÇÕES NA MESA ===================== */
+function changed(key){
+  if(key)fresh.add(key);
+  rebuild();updateCur();
+  const ov=overflow(M);
+  if(ov.length&&Date.now()-lastWarn>4000){
+    lastWarn=Date.now();
+    const i=ov[0],a=M.atoms[i];
+    say(`Cuidado: o ${EL[a.el].n} ${i+1} está com ligações demais. O ${EL[a.el].n} faz só ${EL[a.el].v} ligações. Tire uma peça ou reduza a ligação.`,
+        `Átomo ${i+1} (${a.el}) passou do limite de ${EL[a.el].v} ligações. Tire uma peça ou reduza a ligação.`,'bad');
+  }
+}
+function addAtom(el){if(M.atoms.length>=MAXA){$('bub').textContent='A mesa comporta no máximo 5 átomos na cadeia.';return}M.atoms.push({el,subs:[]});if(M.atoms.length>1)M.bonds.push(1);changed('a'+(M.atoms.length-1))}
+function setEl(i,el){M.atoms[i].el=el;changed('a'+i)}
+function addSub(i,g){M.atoms[i].subs.push(g);changed('s'+i+'_'+(M.atoms[i].subs.length-1))}
+function removeAtom(i){M.atoms.splice(i,1);if(M.bonds.length){M.bonds.splice(Math.min(i,M.bonds.length-1),1)}changed()}
+function removeSub(i,j){M.atoms[i].subs.splice(j,1);changed()}
+function cycleBond(i){M.bonds[i]=M.bonds[i]%3+1;changed()}
+function updateCur(){
+  if(!M.atoms.length){$('cur').textContent='Mesa vazia';return}
+  $('cur').textContent='Sua fórmula: '+fmt(norm(M));
+}
+function clearTable(){M={atoms:[],bonds:[]};changed()}
+
+/* ===================== VERIFICAÇÃO ===================== */
+function check(){
+  if(done)return;
+  const T=LV[li];
+  if(!M.atoms.length){say('A mesa está vazia. Escolha a peça C na paleta e clique na mesa para colocar o primeiro carbono.','Mesa vazia: coloque o primeiro carbono.','bad');return}
+  const ov=overflow(M);
+  if(ov.length){
+    const i=ov[0],a=M.atoms[i];wrong++;
+    say(`Tem um erro de valência. O ${EL[a.el].n} número ${i+1} está com mais de ${EL[a.el].v} ligações. Lembre: carbono faz quatro, nitrogênio três, oxigênio duas, hidrogênio e cloro uma. Remova um grupo ou troque a ligação dupla por simples.`,
+        `Erro de valência no átomo ${i+1} (${a.el}). C faz 4, N faz 3, O faz 2, H e Cl fazem 1.`,'bad');return;
+  }
+  const N=norm(M),c=canon(M);
+  if(c===T.canon){win();return}
+  wrong++;
+  const built=detect(M),bc=carbons(M),tc=T.nc,myF=fmt(N);
+  let voz,txt;
+  if(bc!==tc){
+    const dif=Math.abs(bc-tc);
+    voz=`Ainda não. Você montou ${falaFormula(myF)}. Pelo nome, o prefixo ${PFXN[tc]} pede ${tc} ${tc>1?'carbonos':'carbono'}, mas você tem ${bc}. ${bc<tc?'Faltam':'Sobram'} ${dif}. ${T.how}`;
+    txt=`Você montou ${myF}. O prefixo "${PFXN[tc]}" pede ${tc} C, e você tem ${bc}. ${bc<tc?'Faltam':'Sobram'} ${dif}.`;
+  }else if(built!==T.fn){
+    voz=`Ainda não. O que você montou é ${/^[aeiouáéíóú]/i.test(FN[built])?'um':'um'} ${FN[built]}, mas o pedido é ${FN[T.fn]}. ${FVOZ[T.fn]} Para corrigir: ${T.how}`;
+    txt=`Você montou ${myF}, que é um ${FN[built]}. O pedido é ${FN[T.fn]}. ${T.how}`;
+  }else{
+    const tn=norm(T.S);
+    let k=-1;tn.atoms.forEach((a,i)=>{if(k<0&&(a.subs.length||a.el!=='C'))k=Math.min(i,tn.atoms.length-1-i)+1});
+    const bondsDiff=JSON.stringify(N.bonds)!==JSON.stringify(tn.bonds)&&JSON.stringify(N.bonds)!==JSON.stringify(tn.bonds.slice().reverse());
+    if(bondsDiff){
+      voz=`Quase! A função está certa, mas confira as ligações entre os carbonos. Veja o infixo do nome: an é simples, en é dupla, in é tripla.`;
+      txt=`Função certa, mas as ligações não batem. Confira o infixo (an, en, in).`;
+    }else{
+      voz=`Quase! É ${FN[built]} mesmo, mas a posição do grupo está errada. Pelo nome, o grupo fica no carbono número ${k>0?NUMW[k]:'indicado'}, contando da ponta mais próxima.`;
+      txt=`Função certa, posição errada. No pedido, o grupo fica no carbono ${k>0?k:'indicado no nome'}.`;
+    }
+  }
+  say(voz,txt,'bad');beep(140,.25,'sawtooth');
+  $('ps').textContent=starStr(Math.max(1,3-wrong-(revealed?1:0)));
+}
+function win(){
+  done=true;
+  const T=LV[li];
+  const stars=Math.max(1,3-wrong-(revealed?1:0));
+  SAVE.stars[li]=Math.max(SAVE.stars[li]||0,stars);persist();
+  say(`Muito bem! Você montou ${T.art}. ${T.ok}`,`Correto! ${T.n}: ${fmt(norm(M))}. ${T.ok}`,'ok');
+  [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.18),i*120));
+  confetti();
+  setTimeout(()=>{
+    const last=li===LV.length-1;
+    showCard(`<h2>${last?'Laboratório dominado!':'Composto sintetizado!'}</h2>
+     <p class="stars" style="font-size:1.6rem;margin:0">${starStr(stars)}</p>
+     <p><b>${T.n}</b> &mdash; <span style="font-family:var(--mono);color:var(--accent)">${fmt(norm(M))}</span></p><p class="mute">${T.ok}</p>
+     <button class="go" data-a="${last?'menu':'next'}">${last?'Ver fases':'Próxima fase'}</button> <button class="act" data-a="again">Refazer</button>`);
+  },2600);
+}
+const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+function hint(){
+  const T=LV[li];hints++;
+  if(hints===1){say(`${FVOZ[T.fn]} ${T.how}`,`Dica: ${T.how}`)}
+  else{
+    revealed=true;$('rfo').textContent=fmt(norm(T.S));
+    say(`A fórmula pedida é: ${falaFormula(fmt(norm(T.S)))}. Ela apareceu no cartão do pedido. Essa dica reduz uma estrela.`,`A fórmula pedida: ${fmt(norm(T.S))} (−1 estrela)`);
+    $('ps').textContent=starStr(Math.max(1,3-wrong-1));
+  }
+}
+
+/* ===================== FLUXO DE FASES ===================== */
+function startLevel(i,first){
+  li=i;const T=LV[i];done=false;wrong=0;revealed=false;hints=0;M={atoms:[],bonds:[]};
+  $('pl').textContent=`Fase ${i+1}/${LV.length}`;$('ps').textContent=starStr(3);
+  $('rn').textContent=T.n;$('rf').textContent='Função: '+FN[T.fn];$('rfo').textContent='';
+  $('ov').classList.remove('on');
+  renderSide();fresh.clear();changed();
+  say(`Fase ${i+1}. Monte ${T.art}. ${FVOZ[T.fn]} ${T.how}`,`Fase ${i+1}: monte ${T.n} (${FN[T.fn]}). ${T.how}`);
+}
+function showCard(h){$('card').innerHTML=h;$('ov').classList.add('on')}
+function menu(){
+  const b=LV.map((l,i)=>{const open=i===0||(SAVE.stars[i-1]||0)>0;return `<button data-lv="${i}" ${open?'':'disabled'}><b>${i+1}. ${l.n}</b><span class="stars">${starStr(SAVE.stars[i]||0)}</span></button>`}).join('');
+  showCard(`<h2>Mesa de Síntese 3D</h2>
+   <p class="mute">Monte moléculas em 3D sobre a mesa. O Professor Carbono fala com você em português: ele explica o que está errado e o que fazer. A tabela de apoio fica à direita (botão Tabela).</p>
+   <div class="lv">${b}</div><p class="mute" style="font-size:.8rem">Arraste na mesa para girar a câmera. Se não ouvir a voz, confira o som do navegador: o texto também aparece no balão.</p>`);
+}
+
+/* ===================== ÁUDIO (efeitos) ===================== */
+let AC=null;
+function beep(f,d,t,v){
+  try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(),g=AC.createGain();o.type=t||'sine';o.frequency.value=f;g.gain.value=v||.05;
+    o.connect(g);g.connect(AC.destination);g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.start();o.stop(AC.currentTime+d);}catch(e){}
+}
+
+/* ===================== 3D ===================== */
+const view=$('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+view.insertBefore(renderer.domElement,view.firstChild);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b1626);scene.fog=new THREE.Fog(0x0b1626,14,30);
+const camera=new THREE.PerspectiveCamera(45,1,.1,100);camera.position.set(0,3.4,8.4);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.set(0,.8,0);controls.enablePan=false;controls.minDistance=5;controls.maxDistance=12;
+controls.minPolarAngle=.45;controls.maxPolarAngle=1.45;controls.minAzimuthAngle=-1.1;controls.maxAzimuthAngle=1.1;controls.enableDamping=true;controls.update();
+scene.add(new THREE.HemisphereLight(0xcfe3ff,0x24334a,.85));
+const dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(4,8,5);dl.castShadow=true;dl.shadow.mapSize.set(1024,1024);
+Object.assign(dl.shadow.camera,{left:-8,right:8,top:6,bottom:-6,near:1,far:25});scene.add(dl);
+const pl2=new THREE.PointLight(0xffb347,.5,14);pl2.position.set(-5,3,3);scene.add(pl2);
+
+/* sala: piso, parede, prateleira, mesa */
+function tex(draw,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t}
+const floorT=tex((x,w,h)=>{for(let i=0;i<8;i++)for(let j=0;j<8;j++){x.fillStyle=(i+j)%2?'#16273d':'#1b304a';x.fillRect(i*w/8,j*h/8,w/8,h/8)}},256,256);floorT.wrapS=floorT.wrapT=THREE.RepeatWrapping;floorT.repeat.set(6,6);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({map:floorT,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.position.y=-2.1;floor.receiveShadow=true;scene.add(floor);
+const wall=new THREE.Mesh(new THREE.PlaneGeometry(40,14),new THREE.MeshStandardMaterial({color:0x13263f,roughness:1}));wall.position.set(0,4.9,-6);scene.add(wall);
+[[-6,2.6],[0,2.6],[6,2.6]].forEach(([x,y])=>{
+  const sh=new THREE.Mesh(new THREE.BoxGeometry(4.2,.12,.9),new THREE.MeshStandardMaterial({color:0x5b4630}));sh.position.set(x,y,-5.5);scene.add(sh);
+  [0x4aa3ff,0xff9f4a,0x5fd38d].forEach((col,k)=>{
+    const f=new THREE.Mesh(new THREE.CylinderGeometry(.18,.42,.9,16),new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:.55,roughness:.2}));
+    f.position.set(x-1.3+k*1.3,y+.52,-5.5);scene.add(f);
+  });
+});
+const woodT=tex((x,w,h)=>{x.fillStyle='#8a6038';x.fillRect(0,0,w,h);for(let i=0;i<60;i++){x.fillStyle=`rgba(${60+Math.random()*40},${35+Math.random()*25},15,.25)`;x.fillRect(0,Math.random()*h,w,1+Math.random()*2)}},512,256);
+const tableTop=new THREE.Mesh(new THREE.BoxGeometry(14,.5,6.4),new THREE.MeshStandardMaterial({map:woodT,roughness:.7}));tableTop.position.y=-.25;tableTop.receiveShadow=true;tableTop.userData={type:'table'};scene.add(tableTop);
+[[-6.5,-2.9],[6.5,-2.9],[-6.5,2.9],[6.5,2.9]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.5,1.9,.5),new THREE.MeshStandardMaterial({color:0x3b4552,metalness:.6,roughness:.4}));l.position.set(x,-1.2,z);l.castShadow=true;scene.add(l)});
+const tray=new THREE.Mesh(new THREE.BoxGeometry(9,.12,2.6),new THREE.MeshStandardMaterial({color:0xcfe3f5,transparent:true,opacity:.35,roughness:.15,metalness:.1}));tray.position.y=.06;scene.add(tray);
+
+/* molécula */
+const mol=new THREE.Group();scene.add(mol);
+const sphGeo=new THREE.SphereGeometry(1,28,20),cylGeo=new THREE.CylinderGeometry(1,1,1,10);
+const mats={};Object.keys(EL).forEach(k=>mats[k]=new THREE.MeshStandardMaterial({color:EL[k].col,roughness:.35,metalness:.05}));
+const matBad=new THREE.MeshStandardMaterial({color:0xff3b3b,emissive:0xff2020,emissiveIntensity:.6,roughness:.35});
+const bondMat=new THREE.MeshStandardMaterial({color:0xb9c3d0,roughness:.4,metalness:.3});
+const hitMat=new THREE.MeshBasicMaterial({visible:false});
+const labelCache={};
+function label(t){
+  if(!labelCache[t])labelCache[t]=new THREE.SpriteMaterial({map:tex((x,w,h)=>{x.font='bold 84px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#fff';x.strokeStyle='#0008';x.lineWidth=8;x.strokeText(t,w/2,h/2+4);x.fillText(t,w/2,h/2+4)},128,128),depthTest:false,transparent:true});
+  const s=new THREE.Sprite(labelCache[t]);s.scale.set(.55,.55,1);s.renderOrder=10;return s;
+}
+let SP=1.7,vmode='';
+const SLOTX=i=>(i-2)*SP,Y0=.95;
+let pickables=[];let animObjs=[];let marker=null;
+const SITES=[new THREE.Vector3(0,.85,.55),new THREE.Vector3(0,.85,-.55),new THREE.Vector3(0,-.85,.55),new THREE.Vector3(0,-.85,-.55),new THREE.Vector3(0,.2,1)];
+function bondGroup(a,b,order,r,mat){
+  const g=new THREE.Group(),dir=b.clone().sub(a),len=dir.length();dir.normalize();
+  let perp=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,0,1));if(perp.length()<.1)perp.set(0,1,0);perp.normalize();
+  (order===1?[0]:order===2?[-.09,.09]:[-.16,0,.16]).forEach(o=>{
+    const m=new THREE.Mesh(cylGeo,mat||bondMat);m.scale.set(r,len,r);
+    m.position.copy(a).add(b).multiplyScalar(.5).addScaledVector(perp,o);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);m.castShadow=true;g.add(m);
+  });
+  return g;
+}
+function addSphere(el,p,key,data,over){
+  const E=EL[el],m=new THREE.Mesh(sphGeo,over?matBad:mats[el]);
+  m.position.copy(p);m.userData=Object.assign({base:E.r,born:fresh.has(key)?performance.now():-1e9},data||{});
+  m.scale.setScalar(m.userData.born>0?.01:E.r);m.castShadow=true;mol.add(m);animObjs.push(m);
+  if(data)pickables.push(m);
+  return m;
+}
+function rebuild(){
+  for(let i=mol.children.length-1;i>=0;i--){const c=mol.children[i];mol.remove(c)}
+  pickables=[tableTop];animObjs=[];marker=null;
+  const n=M.atoms.length;
+  for(let i=0;i<n;i++){
+    const a=M.atoms[i],p=new THREE.Vector3(SLOTX(i),Y0,0),over=usedOf(M,i)>EL[a.el].v;
+    const sp=addSphere(a.el,p,'a'+i,{type:'atom',i},over);
+    if(a.el!=='H'){const lb=label(a.el);lb.position.copy(p);mol.add(lb)}
+    if(i<n-1){
+      const q=new THREE.Vector3(SLOTX(i+1),Y0,0);
+      mol.add(bondGroup(p,q,M.bonds[i],.07));
+      const hit=new THREE.Mesh(cylGeo,hitMat);hit.scale.set(.3,SP,.3);hit.position.copy(p).add(q).multiplyScalar(.5);hit.rotation.z=Math.PI/2;hit.userData={type:'bond',i};mol.add(hit);pickables.push(hit);
+    }
+    /* grupos e hidrogênios */
+    const sites=[];
+    if(i===0)sites.push(new THREE.Vector3(-1,.35,0));
+    if(i===n-1)sites.push(new THREE.Vector3(1,.35,0));
+    SITES.forEach(s=>sites.push(s));
+    const items=a.subs.map((g,j)=>({g,j}));
+    const free=Math.max(0,EL[a.el].v-usedOf(M,i));
+    for(let k=0;k<free;k++)items.push({g:'H'});
+    items.forEach((it,k)=>{
+      const d=sites[k%sites.length].clone().normalize(),L=it.g==='H'?.95:1.1,q=p.clone().addScaledVector(d,L);
+      if(it.g==='H'){
+        mol.add(bondGroup(p,q,1,.045));addSphere('H',q,'h',null);
+      }else{
+        const S=SUBS[it.g];
+        mol.add(bondGroup(p,q,S.cost>=3?3:S.cost,.06));
+        const so=addSphere(S.el,q,'s'+i+'_'+it.j,{type:'sub',i,j:it.j});
+        if(S.el!=='Cl'||true){const lb=label(S.el);lb.position.copy(q);lb.scale.set(.5,.5,1);mol.add(lb)}
+        const angs=S.h===1?[.7]:S.h===2?[.55,-.55]:[];
+        angs.forEach(an=>{
+          const dd=d.clone().applyAxisAngle(new THREE.Vector3(0,0,1),an*(d.x>=0?1:-1)*(Math.abs(d.y)>.5?1:1));
+          const hq=q.clone().addScaledVector(dd,.8);
+          mol.add(bondGroup(q,hq,1,.04));addSphere('H',hq,'h',null);
+        });
+      }
+    });
+  }
+  if(n<MAXA){
+    const mk2=new THREE.Mesh(new THREE.TorusGeometry(.5,.05,10,32),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.8}));
+    mk2.position.set(SLOTX(n),Y0,0);mk2.userData={type:'slot'};mol.add(mk2);pickables.push(mk2);marker=mk2;
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(.5,24),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.12,side:THREE.DoubleSide}));disc.position.copy(mk2.position);disc.userData={type:'slot'};mol.add(disc);pickables.push(disc);
+  }
+  fresh.clear();
+}
+/* confete */
+let conf=[];
+function confetti(){
+  for(let i=0;i<90;i++){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.04),new THREE.MeshBasicMaterial({color:[0xffb347,0x5fd38d,0x4aa3ff,0xff7ac8][i%4]}));
+    m.position.set((Math.random()-.5)*4,2.2,(Math.random()-.5)*2);m.userData={v:new THREE.Vector3((Math.random()-.5)*.12,.08+Math.random()*.1,(Math.random()-.5)*.08),l:140};scene.add(m);conf.push(m);
+  }
+}
+/* picking */
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
+function pick(ev){
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse.x=((ev.clientX-r.left)/r.width)*2-1;mouse.y=-((ev.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(mouse,camera);
+  const h=ray.intersectObjects(pickables,false);
+  return h.length?h[0].object.userData:null;
+}
+let down=null;
+renderer.domElement.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY}});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!down||done)return;
+  const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);down=null;
+  if(moved>6)return;
+  onClick(pick(e));
+});
+function onClick(u){
+  if(!u)return;
+  const t=tool;
+  if(t==='C'||t==='O'||t==='N'){
+    if(u.type==='atom')setEl(u.i,t);
+    else if(u.type==='slot'||u.type==='table')addAtom(t);
+  }else if(SUBS[t]){
+    if(u.type==='atom')addSub(u.i,t);
+    else $('bub').textContent='Para colocar um grupo, clique em um átomo da cadeia.';
+  }else if(t==='bond'){
+    if(u.type==='bond')cycleBond(u.i);
+    else $('bub').textContent='Clique no traço entre dois átomos para mudar a ligação (simples, dupla, tripla).';
+  }else if(t==='del'){
+    if(u.type==='atom')removeAtom(u.i);
+    else if(u.type==='sub')removeSub(u.i,u.j);
+    else if(u.type==='bond'){M.bonds[u.i]=1;changed()}
+  }
+  beep(520,.06,'triangle',.04);
+}
+/* tamanho e loop */
+function resize(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);
+  const m=w/h<1.1?'p':'l';
+  if(m!==vmode){vmode=m;SP=m==='p'?1.15:1.7;camera.fov=m==='p'?60:45;const d=m==='p'?10.2:8.8;camera.position.set(0,d*.375,d*.927);controls.update();try{rebuild()}catch(e){}}
+camera.aspect=w/h;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(view);window.addEventListener('resize',resize);
+const ease=t=>{const c=1.70158;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
+function loop(){
+  requestAnimationFrame(loop);
+  const now=performance.now();
+  animObjs.forEach(m=>{const t=Math.min(1,(now-m.userData.born)/350);m.scale.setScalar(m.userData.base*(m.userData.born>0?Math.max(.01,ease(t)):1))});
+  if(marker){const s=1+.08*Math.sin(now*.005);marker.scale.set(s,s,1)}
+  conf.forEach(m=>{m.position.add(m.userData.v);m.userData.v.y-=.0035;m.rotation.x+=.1;m.rotation.y+=.07;m.userData.l--;if(m.userData.l<=0){scene.remove(m)}});
+  conf=conf.filter(m=>m.userData.l>0);
+  controls.update();renderer.render(scene,camera);
+}
+
+/* ===================== EVENTOS DA INTERFACE ===================== */
+$('tbar').addEventListener('click',e=>{
+  const b=e.target.closest('.tool');if(!b)return;
+  tool=b.dataset.t;document.querySelectorAll('.tool').forEach(x=>x.setAttribute('aria-pressed',x===b));
+});
+$('bv').onclick=check;$('bh').onclick=hint;$('br').onclick=()=>{speak(lastSay)};
+$('bs').onclick=()=>{voiceOn=!voiceOn;$('bs').textContent='Voz: '+(voiceOn?'ligada':'desligada');if(!voiceOn){try{speechSynthesis.cancel()}catch(e){}}else speak(lastSay)};
+$('bc').onclick=()=>{if(!done)clearTable()};
+$('bt').onclick=()=>$('side').classList.toggle('on');
+$('bm').onclick=menu;
+$('card').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.lv!==undefined)startLevel(+b.dataset.lv);
+  else if(b.dataset.a==='next')startLevel(li+1);
+  else if(b.dataset.a==='again')startLevel(li);
+  else if(b.dataset.a==='menu')menu();
+});
+window.__game={get M(){return M},startLevel,check,addAtom,addSub,cycleBond,setEl,say,get li(){return li},LV,canon,fmt,norm,detect};
+
+resize();loop();
+$('side').classList.toggle('on',window.innerWidth>780);
+renderSide();menu();
+$('bub').textContent='Escolha uma fase para começar. O professor vai explicar tudo por voz.';
+</script>
+</body>
+</html>
