@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mesa de Síntese 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: mesa 3D ocupa a tela; tabela de apoio à direita; paleta e professor embaixo. */
+:root{
+  --bg:#0a1320; --panel:#12233a; --panel2:#1a3050; --panel3:#22395b; --deep:#0b1729; --line:#2b4a70; --line2:#3a5d88;
+  --ink:#eaf1fa; --mute:#93a8c3; --accent:#ffb347; --accent2:#ffd08a; --accent-ink:#2a1a00; --ok:#5fd38d; --bad:#ff6b6b;
+  --sh:0 24px 60px -18px #000d;
+  --disp:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#3a5d88 transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#app{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);height:100%}
+/* cabeçalho */
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(180deg,#152a45,var(--panel));border-bottom:1px solid var(--line);min-width:0}
+.brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.logo{flex:none;width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,#ffc56b,#f0962a);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 4px 14px -4px #ffb34799}
+.logo svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+header h1{font-family:var(--disp);font-size:1.08rem;margin:0;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1 small{display:block;font-family:var(--body);font-weight:500;font-size:.72rem;color:var(--mute)}
+.hud{display:flex;align-items:center;gap:8px;background:var(--deep);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.hud[hidden]{display:none}
+.hbtn{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:.84rem;font-weight:600}
+.hbtn:hover{border-color:var(--accent);color:var(--accent2)}
+.hbtn[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:#3a2c14}
+@media(max-width:600px){header h1 small{display:none}.hbtn .tx{display:none}.hbtn{padding:8px 9px}}
+@media(max-width:430px){header h1{display:none}}
+main{position:relative;display:flex;min-height:0}
+#view{position:relative;flex:1;min-width:0}
+canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none}
+#req{position:absolute;left:10px;top:10px;background:#0a1320cc;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid #ffb34799;border-radius:14px;padding:9px 14px;max-width:min(320px,70%);box-shadow:0 10px 30px -12px #000c}
+#req .t{font-size:.72rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+#req .n{font-family:var(--disp);font-size:1.25rem;font-weight:800}
+#req .f{font-family:var(--mono);font-size:.82rem;color:var(--accent);margin-top:2px;min-height:1.1em}
+#cur{position:absolute;left:10px;bottom:10px;background:#0a1320dd;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-family:var(--mono);font-size:.85rem;max-width:calc(100% - 20px);overflow-wrap:anywhere}
+#side{width:340px;max-width:92vw;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:10px 12px;display:none}
+#side.on{display:block}
+@media(max-width:780px){#side{position:absolute;right:0;top:0;bottom:0;z-index:4;box-shadow:-8px 0 24px #000a}}
+#side h3{display:flex;align-items:center;gap:8px;font-family:var(--disp);margin:12px 0 6px;font-size:.95rem}
+#side h3::before{content:'';flex:none;width:4px;height:14px;border-radius:2px;background:var(--accent)}
+.tb{width:100%;border-collapse:collapse;font-size:.74rem;margin:2px 0 6px}
+.tb th{background:var(--panel2);text-align:left;padding:4px 6px;font-family:var(--disp)}
+.tb td{padding:3px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tb td.m{font-family:var(--mono);color:var(--accent)}
+.tb tr.hl td{background:#ffb34730;font-weight:600}
+.tb tr.hl td:first-child{box-shadow:inset 4px 0 0 var(--accent)}
+.pf{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;font-size:.72rem;text-align:center}
+.pf div{background:var(--panel2);border-radius:6px;padding:3px 0}.pf b{display:block;font-family:var(--mono);color:var(--accent)}
+.note{background:var(--panel2);border-left:4px solid var(--accent);border-radius:8px;padding:6px 10px;font-size:.78rem;margin:4px 0}
+footer{background:linear-gradient(0deg,#0f1f35,var(--panel));border-top:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+#tutor{display:flex;gap:10px;align-items:flex-start}
+.av{flex:none;width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#ffc56b,#f0962a);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:800;font-size:1.3rem;border:3px solid #ffd88a;box-shadow:0 0 0 4px #ffb3471f}
+.vc{display:flex;gap:6px;align-self:center}
+.ib{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--panel2);border:1px solid var(--line)}
+.ib:hover{border-color:var(--accent);color:var(--accent)}
+.ib[aria-pressed=false]{color:var(--bad);border-color:#ff6b6b66}
+.av.talk{animation:talk .5s infinite alternate}
+@keyframes talk{to{transform:scale(1.1)}}
+#bub{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:.92rem;line-height:1.4;min-height:48px;max-height:96px;overflow:auto}
+#bub.bad{border-color:var(--bad)}#bub.ok{border-color:var(--ok)}
+/* barra de ferramentas: grupos com rótulo */
+.tbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.seg{display:flex;flex-direction:column;gap:4px}
+.lab{font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:600;padding-left:2px}
+.seg .row{display:flex;gap:3px;background:var(--deep);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg.util{margin-left:auto}
+.seg.util .row,.seg.ver .row{gap:6px;background:none;border:0;padding:3px 0}
+.tool{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;border:1px solid transparent;border-radius:9px;padding:6px 10px;font-family:var(--mono);font-weight:600;font-size:.88rem;min-width:42px;color:var(--ink)}
+.tool:hover{background:var(--panel2)}
+.tool[aria-pressed=true]{border-color:var(--accent);background:#3a2c14;color:var(--accent)}
+.tool.ed{font-family:var(--body);font-size:.84rem}
+.dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:inset -2px -2px 3px #0007,inset 1px 1px 2px #fff6}
+.dot.sm{width:9px;height:9px}
+.act{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:.84rem;font-weight:600}
+.act:hover{border-color:var(--accent);color:var(--accent2)}
+.go{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(180deg,#ffc56b,#f5a13a);color:var(--accent-ink);border:0;font-family:var(--disp);font-weight:800;padding:9px 18px;border-radius:12px;box-shadow:0 6px 16px -6px #ffb347aa,inset 0 -2px 0 #0002}
+.go:hover{filter:brightness(1.06)}
+.go:active{transform:translateY(1px)}
+.go svg.i{stroke-width:2.6}
+@media(max-width:1020px){.act .tx{display:none}.act{padding:8px 10px}}
+@media(max-width:560px){
+  .lab{display:none}.tbar{gap:6px}.tool{padding:6px 8px}
+  .seg.atoms{order:1}.seg.edit{order:2}.seg.groups{order:3}.seg.util{order:4}.seg.ver{order:5;flex:1 1 auto}.seg.ver .go{width:100%}
+  .vc{flex-direction:column;gap:4px}.ib{width:36px;height:36px;border-radius:10px}
+}
+
+/* menus (fases e resultado) */
+#ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:16px;z-index:20;background:radial-gradient(120% 90% at 50% 0%,#0d1d33c4,#050b14f2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#ov.on{display:flex}
+.card{position:relative;background:linear-gradient(180deg,#16294a,#11213a);border:1px solid var(--line2);border-radius:20px;box-shadow:var(--sh);max-width:780px;width:100%;max-height:100%;overflow:auto;padding:22px;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
+.card.sm{max-width:460px;text-align:center}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}}
+.x{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);display:grid;place-items:center}
+.x:hover{border-color:var(--accent);color:var(--accent)}
+.hero{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:4px;align-items:center;margin:0 0 16px}
+.x+.hero{padding-right:44px}
+.hero .logo{grid-row:span 2;width:54px;height:54px;border-radius:16px}
+.hero .logo svg{width:34px;height:34px}
+.hero h2{align-self:end;font-family:var(--disp);font-size:1.65rem;font-weight:800;margin:0;line-height:1.05}
+.hero p{align-self:start;margin:0;color:var(--mute);font-size:.9rem;line-height:1.4}
+.prog{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--deep);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 18px}
+.prog .meta{flex:1;min-width:200px}
+.prog .nums{display:flex;gap:16px;font-size:.8rem;color:var(--mute);margin-bottom:7px}
+.prog .nums b{color:var(--ink);font-family:var(--mono)}
+.bar{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f0962a,#ffd08a)}
+.prog .msg{font-size:.85rem;color:var(--ok);font-weight:600}
+.sec{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;margin:0 0 9px;font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:600}
+.legend{display:flex;gap:12px;flex-wrap:wrap;text-transform:none;letter-spacing:0;font-weight:500;font-size:.74rem}
+.legend span{display:inline-flex;align-items:center;gap:5px;color:var(--c)}
+.legend span::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--c)}
+.lv{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 18px}
+.lvl{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:11px 12px 12px;min-height:106px;transition:transform .15s,border-color .15s,background-color .15s;animation:pop .32s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--d)*22ms)}
+.lvl:hover:not(:disabled){transform:translateY(-2px);border-color:var(--accent);background-color:var(--panel3)}
+.lvl .top{display:flex;width:100%;justify-content:space-between;align-items:center;min-height:20px}
+.lvl .num{font-family:var(--mono);font-size:.75rem;color:var(--mute)}
+.lvl .nm{font-family:var(--disp);font-weight:800;font-size:1rem;line-height:1.15}
+.st{font-size:.85rem;letter-spacing:1px;color:var(--accent)}
+.st .off{color:#ffffff2b}
+.lvl.done{border-color:#5fd38d55}
+.lvl.done .num{color:var(--ok)}
+.lvl.next{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 10px 26px -12px #ffb347aa}
+.tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:var(--accent-ink);font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:99px}
+.tag svg.i{width:10px;height:10px;fill:currentColor;stroke:none}
+.lvl:disabled{cursor:not-allowed;background:#15263f;border-style:dashed}
+.lvl:disabled .nm,.lvl:disabled .chip{opacity:.45}
+.lk{color:var(--mute)}
+.lk svg.i{width:15px;height:15px}
+.chip{display:inline-block;margin-top:auto;font-size:.7rem;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap;color:var(--c);background:var(--cb);border:1px solid var(--cl)}
+.k-hc{--c:#c3cddb;--cb:#c3cddb17;--cl:#c3cddb40}
+.k-ox{--c:#ff8f85;--cb:#ff6b6b1c;--cl:#ff6b6b55}
+.k-ni{--c:#8db0ff;--cb:#5b8cff1f;--cl:#5b8cff5c}
+.k-cl{--c:#6fe0a0;--cb:#5fd38d1a;--cl:#5fd38d55}
+.tips{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.tip{display:flex;gap:9px;align-items:flex-start;font-size:.8rem;color:var(--mute);line-height:1.35;background:var(--deep);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.tip svg.i{color:var(--accent);margin-top:1px}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ok);font-weight:700}
+.card.sm h2{font-family:var(--disp);font-size:1.6rem;font-weight:800;margin:4px 0 4px}
+.bigstars{display:flex;justify-content:center;gap:8px;margin:4px 0 14px}
+.bigstars span{font-size:2.7rem;line-height:1;color:#ffffff1f;animation:star .55s cubic-bezier(.2,1.6,.4,1) both;animation-delay:calc(.2s + var(--d)*.16s)}
+.bigstars span.on{color:var(--accent);text-shadow:0 0 18px #ffb34788}
+@keyframes star{from{opacity:0;transform:scale(.3) rotate(-30deg)}}
+.result{background:var(--deep);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 12px}
+.result .nm{font-family:var(--disp);font-weight:800;font-size:1.15rem}
+.result .fm{font-family:var(--mono);color:var(--accent);font-size:1.05rem;margin:2px 0 8px;overflow-wrap:anywhere}
+.exp{color:var(--mute);font-size:.88rem;line-height:1.45;margin:0 0 12px}
+.tipline{font-size:.78rem;color:var(--accent2);background:#ffb34712;border:1px dashed #ffb34755;border-radius:10px;padding:7px 10px;margin:0 0 14px}
+.btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.ghost{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 14px;font-weight:600;font-size:.88rem}
+.ghost:hover{border-color:var(--accent);color:var(--accent2)}
+@media(max-width:560px){.card{padding:18px 16px;border-radius:18px}.hero{column-gap:12px}.hero .logo{grid-row:auto;width:42px;height:42px;border-radius:12px}.hero .logo svg{width:26px;height:26px}.hero h2{align-self:center;font-size:1.25rem}.x+.hero{padding-right:0}.x+.hero h2{margin-right:44px}.hero p{grid-column:1/-1;margin-top:8px}.lv{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.lvl{min-height:98px;padding:10px}}
+.stars{color:var(--accent);letter-spacing:2px}
+.mute{color:var(--mute)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="3"/><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M10.5 9.1 7.5 14.4M13.5 9.1l3 5.3M9 17h6"/></svg></div>
+      <h1>Mesa de Síntese 3D<small>Química orgânica com o Prof. Carbono</small></h1>
+    </div>
+    <div class="hud" id="hud" hidden><span id="pl">Fase 1</span><span class="stars" id="ps"></span></div>
+    <button class="hbtn" id="bt" aria-pressed="false" title="Tabela de apoio"><svg class="i" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="tx">Tabela</span></button>
+    <button class="hbtn" id="bm" title="Escolher fase"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="tx">Fases</span></button>
+  </header>
+  <main>
+    <div id="view">
+      <div id="req"><div class="t">Pedido</div><div class="n" id="rn"></div><div class="t" id="rf"></div><div class="f" id="rfo"></div></div>
+      <div id="cur"></div>
+    </div>
+    <aside id="side"></aside>
+  </main>
+  <footer>
+    <div id="tutor">
+      <div class="av" id="av">C</div>
+      <div id="bub">Carregando o laboratório...</div>
+      <div class="vc">
+        <button class="ib" id="br" title="Repetir a fala" aria-label="Repetir a fala"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+        <button class="ib" id="bs" aria-pressed="true"></button>
+      </div>
+    </div>
+    <div class="tbar" id="tbar">
+      <div class="seg atoms"><span class="lab">Átomos</span><div class="row">
+        <button class="tool" data-t="C" aria-pressed="true" title="Carbono: faz 4 ligações"><i class="dot" style="--c:#8a919c"></i>C</button>
+        <button class="tool" data-t="O" aria-pressed="false" title="Oxigênio: faz 2 ligações"><i class="dot" style="--c:#e8423c"></i>O</button>
+        <button class="tool" data-t="N" aria-pressed="false" title="Nitrogênio: faz 3 ligações"><i class="dot" style="--c:#3b6fe8"></i>N</button>
+      </div></div>
+      <div class="seg groups"><span class="lab">Grupos</span><div class="row">
+        <button class="tool" data-t="OH" aria-pressed="false" title="Hidroxila (clique em um átomo)"><i class="dot sm" style="--c:#e8423c"></i>–OH</button>
+        <button class="tool" data-t="=O" aria-pressed="false" title="Carbonila, dupla com O (clique em um átomo)"><i class="dot sm" style="--c:#e8423c"></i>=O</button>
+        <button class="tool" data-t="NH2" aria-pressed="false" title="Grupo amino (clique em um átomo)"><i class="dot sm" style="--c:#3b6fe8"></i>–NH₂</button>
+        <button class="tool" data-t="Cl" aria-pressed="false" title="Cloro (clique em um átomo)"><i class="dot sm" style="--c:#3ddc6a"></i>–Cl</button>
+      </div></div>
+      <div class="seg edit"><span class="lab">Editar</span><div class="row">
+        <button class="tool ed" data-t="bond" aria-pressed="false" title="Clique no traço entre dois átomos: simples, dupla, tripla"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 10.2h9M7.5 13.8h9"/></svg>Ligação</button>
+        <button class="tool ed" data-t="del" aria-pressed="false" title="Clique em um átomo ou grupo para apagar"><svg class="i" viewBox="0 0 24 24"><path d="M20 20H9l-5-5a2 2 0 0 1 0-2.8l9-9a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L11 19"/><path d="M8.5 10.5l6 6"/></svg>Apagar</button>
+      </div></div>
+      <div class="seg util"><span class="lab">&nbsp;</span><div class="row">
+        <button class="act" id="bh" title="Dica" aria-label="Dica"><svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg><span class="tx">Dica</span></button>
+        <button class="act" id="bc" title="Limpar a mesa" aria-label="Limpar a mesa"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span class="tx">Limpar</span></button>
+      </div></div>
+      <div class="seg ver"><span class="lab">&nbsp;</span><div class="row">
+        <button class="go" id="bv"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Verificar</button>
+      </div></div>
+    </div>
+  </footer>
+  <div id="ov" role="dialog" aria-modal="true" aria-label="Menu"><div class="card" id="card"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ===================== QUÍMICA ===================== */
+const EL={C:{v:4,col:0x434a55,r:.42,n:'carbono'},O:{v:2,col:0xe8423c,r:.38,n:'oxigênio'},N:{v:3,col:0x3b6fe8,r:.38,n:'nitrogênio'},H:{v:1,col:0xf4f6f9,r:.24},Cl:{v:1,col:0x3ddc6a,r:.46}};
+const SUBS={'OH':{cost:1,el:'O',h:1,label:'OH'},'=O':{cost:2,el:'O',h:0,label:'=O'},'NH2':{cost:1,el:'N',h:2,label:'NH₂'},'Cl':{cost:1,el:'Cl',h:0,label:'Cl'},'≡N':{cost:3,el:'N',h:0,label:'≡N'}};
+const MAXA=5;
+const sub=n=>String(n).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[d]);
+const cost=a=>a.subs.reduce((s,x)=>s+SUBS[x].cost,0);
+function usedOf(S,i){let u=cost(S.atoms[i]);if(i>0)u+=S.bonds[i-1];if(i<S.atoms.length-1)u+=S.bonds[i];return u}
+function freeOf(S,i){return EL[S.atoms[i].el].v-usedOf(S,i)}
+function clone(S){return{atoms:S.atoms.map(a=>({el:a.el,subs:a.subs.slice()})),bonds:S.bonds.slice()}}
+/* terminais O/N viram grupos: C–O = –OH, C=O, C–N = –NH2, C≡N */
+function norm(S){
+  const R=clone(S);let ch=true;
+  while(ch&&R.atoms.length>=2){
+    ch=false;
+    for(const end of ['last','first']){
+      const i=end==='last'?R.atoms.length-1:0,a=R.atoms[i];
+      if(R.atoms.length<2||(a.el!=='O'&&a.el!=='N')||a.subs.length)continue;
+      const bi=end==='last'?R.bonds[R.bonds.length-1]:R.bonds[0],j=end==='last'?i-1:i+1;
+      let g=null;
+      if(a.el==='O')g=bi===1?'OH':bi===2?'=O':null;
+      else g=bi===1?'NH2':bi===3?'≡N':null;
+      if(!g)continue;
+      R.atoms[j].subs.push(g);
+      if(end==='last'){R.atoms.pop();R.bonds.pop()}else{R.atoms.shift();R.bonds.shift()}
+      ch=true;break;
+    }
+  }
+  return R;
+}
+const ORD=['=O','OH','NH2','Cl','≡N'];
+function fmt(S){
+  const n=S.atoms.length,out=[];
+  for(let i=0;i<n;i++){
+    const a=S.atoms[i],term=(i===0||i===n-1),subs=a.subs.slice().sort((x,y)=>ORD.indexOf(x)-ORD.indexOf(y));
+    const h=EL[a.el].v-usedOf(S,i);let t='';
+    if(a.el==='C'){
+      if(subs.includes('=O')){
+        if(subs.includes('OH'))t='COOH';else if(subs.includes('NH2'))t='CONH₂';else if(term&&h>0)t='CHO';else t='CO';
+      }else if(subs.includes('≡N'))t='C≡N';
+      else{
+        t='C'+(h>0?'H'+(h>1?sub(h):''):'');
+        if(subs.length){const l=subs.map(s=>SUBS[s].label);t+=(term&&l.length===1)?'–'+l[0]:l.map(x=>'('+x+')').join('')}
+      }
+    }else if(a.el==='O')t='O';
+    else if(a.el==='N')t='N'+(h>0?'H'+(h>1?sub(h):''):'');
+    out.push(t);
+    if(i<n-1)out.push(['','–','=','≡'][S.bonds[i]]);
+  }
+  return out.join('');
+}
+function canon(S){
+  const N=norm(S);
+  const rev={atoms:N.atoms.slice().reverse(),bonds:N.bonds.slice().reverse()};
+  const a=fmt(N),b=fmt(rev);return a<b?a:b;
+}
+const FN={alcano:'alcano',alceno:'alceno',alcino:'alcino',alcool:'álcool',aldeido:'aldeído',cetona:'cetona',acido:'ácido carboxílico',ester:'éster',eter:'éter',amina:'amina',amida:'amida',nitrila:'nitrila',haleto:'haleto orgânico'};
+const FROW={alcano:'Alcano',alceno:'Alceno',alcino:'Alcino',alcool:'Álcool',aldeido:'Aldeído',cetona:'Cetona',acido:'Ácido carboxílico',ester:'Éster',eter:'Éter',amina:'Amina',amida:'Amida',nitrila:'Nitrila',haleto:'Haleto'};
+const FVOZ={
+ alcano:'Um alcano tem só ligações simples entre os carbonos.',
+ alceno:'Um alceno tem uma ligação dupla entre dois carbonos.',
+ alcool:'Um álcool tem o grupo hidroxila, ó agá, ligado a um carbono que só faz ligações simples.',
+ aldeido:'Um aldeído tem a carbonila, cê dupla ó, na ponta da cadeia, com um hidrogênio no mesmo carbono.',
+ cetona:'Uma cetona tem a carbonila, cê dupla ó, no meio da cadeia, entre dois carbonos.',
+ acido:'Um ácido carboxílico tem carbonila e hidroxila no mesmo carbono, na ponta da cadeia.',
+ ester:'Um éster tem uma carbonila e um oxigênio ligado a outro carbono: o grupo cê ó ó, no meio da cadeia.',
+ eter:'Um éter tem um oxigênio ligado a dois carbonos, sem hidrogênio no oxigênio.',
+ amina:'Uma amina tem nitrogênio ligado a carbono, sem carbonila.',
+ amida:'Uma amida tem a carbonila ligada a um nitrogênio.',
+ nitrila:'Uma nitrila tem o grupo cê tripla ene, na ponta da cadeia.',
+ haleto:'Um haleto orgânico tem um halogênio, como o cloro, ligado a carbono.'
+};
+const PRI=['acido','ester','amida','nitrila','aldeido','cetona','alcool','amina','eter','haleto','alcino','alceno'];
+function detect(S0){
+  const S=norm(S0),n=S.atoms.length,set=new Set();
+  const hasCO=j=>S.atoms[j].subs.includes('=O');
+  for(let i=0;i<n;i++){
+    const a=S.atoms[i],nb=[];if(i>0)nb.push(i-1);if(i<n-1)nb.push(i+1);
+    if(a.el==='C'){
+      const co=a.subs.includes('=O');
+      if(co){
+        const nN=nb.some(j=>S.atoms[j].el==='N'),nO=nb.some(j=>S.atoms[j].el==='O');
+        if(a.subs.includes('OH'))set.add('acido');
+        else if(a.subs.includes('NH2')||nN)set.add('amida');
+        else if(nO)set.add('ester');
+        else if(nb.length<=1)set.add('aldeido');
+        else set.add('cetona');
+      }else{
+        if(a.subs.includes('≡N'))set.add('nitrila');
+        if(a.subs.includes('OH'))set.add('alcool');
+        if(a.subs.includes('NH2'))set.add('amina');
+        if(a.subs.includes('Cl'))set.add('haleto');
+      }
+    }else if(a.el==='O'&&nb.length===2){
+      if(!nb.some(hasCO))set.add('eter');
+    }else if(a.el==='N'&&nb.length===2){
+      if(!nb.some(hasCO))set.add('amina');
+    }
+    if(i<n-1&&a.el==='C'&&S.atoms[i+1].el==='C'){if(S.bonds[i]===2)set.add('alceno');if(S.bonds[i]===3)set.add('alcino')}
+  }
+  for(const k of PRI)if(set.has(k))return k;
+  return 'alcano';
+}
+const carbons=S=>norm(S).atoms.filter(a=>a.el==='C').length;
+function overflow(S){const r=[];S.atoms.forEach((a,i)=>{if(usedOf(S,i)>EL[a.el].v)r.push(i)});return r}
+const PFXN=['','met','et','prop','but','pent','hex'];
+const NUMW=['zero','um','dois','três','quatro','cinco','seis'];
+function falaFormula(f){
+  return f.replace(/[₀-₉]/g,d=>' '+NUMW[d.charCodeAt(0)-8320]+' ').replace(/–/g,', ').replace(/=/g,' dupla ').replace(/≡/g,' tripla ').replace(/[()]/g,' ').replace(/([A-Z][a-z]?)/g,' $1 ').replace(/\s+/g,' ').trim();
+}
+
+/* ===================== FASES ===================== */
+const mk=(atoms,bonds,subs)=>({atoms:atoms.map((el,i)=>({el,subs:(subs&&subs[i])||[]})),bonds});
+const LV=[
+ {n:'Etano',art:'o etano',fala:'etano',fn:'alcano',S:mk(['C','C'],[1]),how:'Clique em C na paleta e depois na mesa para colocar um carbono. Faça isso duas vezes. Os hidrogênios se completam sozinhos, porque cada carbono faz quatro ligações. Depois clique em Verificar.',ok:'O etano tem dois carbonos, prefixo et, e só ligações simples, infixo an, por isso termina em ano.'},
+ {n:'Eteno',art:'o eteno',fala:'eteno',fn:'alceno',S:mk(['C','C'],[2]),how:'Coloque dois carbonos. Depois escolha a ferramenta Ligação e clique no traço entre eles para torná-la dupla.',ok:'No eteno a dupla ligação muda o infixo de an para en. Cada carbono ficou com dois hidrogênios.'},
+ {n:'Etanol',art:'o etanol',fala:'etanol',fn:'alcool',S:mk(['C','C'],[1],[[],['OH']]),how:'Coloque dois carbonos, com ligação simples. Escolha a peça O H e clique em um dos carbonos.',ok:'O sufixo ol indica o grupo hidroxila. O carbono com O H perdeu um hidrogênio para manter as quatro ligações.'},
+ {n:'Propan-2-ol',art:'o propan-2-ol',fala:'propan dois ol',fn:'alcool',S:mk(['C','C','C'],[1,1],[[],['OH'],[]]),how:'Use três carbonos. O número dois no nome diz que o O H fica no carbono do meio.',ok:'O número 2 mostra a posição do O H. Esse é um álcool secundário, porque o carbono do O H liga a dois outros carbonos.'},
+ {n:'Etanal',art:'o etanal',fala:'etanal',fn:'aldeido',S:mk(['C','C'],[1],[[],['=O']]),how:'Coloque dois carbonos e a peça dupla O em um carbono da ponta.',ok:'A carbonila na ponta da cadeia, com um hidrogênio, é o aldeído. O sufixo é al.'},
+ {n:'Propanona',art:'a propanona',fala:'propanona',fn:'cetona',S:mk(['C','C','C'],[1,1],[[],['=O'],[]]),how:'Use três carbonos e ponha a peça dupla O no carbono do meio.',ok:'A carbonila entre dois carbonos é a cetona. O sufixo é ona. Essa é a acetona do removedor de esmalte.'},
+ {n:'Ácido etanoico',art:'o ácido etanoico',fala:'ácido etanoico',fn:'acido',S:mk(['C','C'],[1],[[],['=O','OH']]),how:'Use dois carbonos. No mesmo carbono da ponta, coloque a peça dupla O e também a peça O H.',ok:'Carbonila mais hidroxila no mesmo carbono formam o grupo C O O H, o ácido carboxílico. É o ácido do vinagre.'},
+ {n:'Etanoato de metila',art:'o etanoato de metila',fala:'etanoato de metila',fn:'ester',S:mk(['C','C','O','C'],[1,1,1],[[],['=O'],[],[]]),how:'Coloque, nesta ordem: um carbono, outro carbono, um oxigênio e mais um carbono. Depois ponha a peça dupla O no segundo carbono. O oxigênio do meio liga a carbonila ao grupo metila.',ok:'O éster vem de um ácido mais um álcool. A parte etanoato é do ácido, e a parte metila é do álcool.'},
+ {n:'Metoxi-metano',art:'o metoxi-metano',fala:'metóxi metano',fn:'eter',S:mk(['C','O','C'],[1,1]),how:'Coloque um carbono, o oxigênio e outro carbono, nessa ordem. O oxigênio fica no meio, só com as duas ligações.',ok:'O éter tem oxigênio entre dois carbonos, sem hidrogênio no oxigênio. Ele é isômero do etanol, com a mesma fórmula C dois H seis O.'},
+ {n:'Etilamina',art:'a etilamina',fala:'etilamina',fn:'amina',S:mk(['C','C'],[1],[[],['NH2']]),how:'Coloque dois carbonos e a peça N H dois em um deles.',ok:'A amina vem da amônia: o nitrogênio faz três ligações. Aqui ele ficou com dois hidrogênios e um carbono.'},
+ {n:'Etanamida',art:'a etanamida',fala:'etanamida',fn:'amida',S:mk(['C','C'],[1],[[],['=O','NH2']]),how:'Use dois carbonos. No carbono da ponta, ponha a peça dupla O e a peça N H dois.',ok:'Carbonila ligada a nitrogênio é uma amida. É a mesma ligação que une os aminoácidos nas proteínas.'},
+ {n:'Etanonitrila',art:'a etanonitrila',fala:'etano nitrila',fn:'nitrila',S:mk(['C','C','N'],[1,3]),how:'Coloque dois carbonos e depois o átomo N. Use a ferramenta Ligação para fazer uma ligação tripla entre o último carbono e o nitrogênio.',ok:'A nitrila tem carbono com ligação tripla ao nitrogênio. Os três do triplo usam todas as ligações do N.'},
+ {n:'Cloroetano',art:'o cloroetano',fala:'cloroetano',fn:'haleto',S:mk(['C','C'],[1],[[],['Cl']]),how:'Coloque dois carbonos e a peça C L em um deles.',ok:'O cloro substitui um hidrogênio. O haleto orgânico recebe o prefixo cloro no nome.'}
+];
+const HV=[
+ 'Clique no cê da paleta e depois na mesa para colocar um carbono. Faça isso duas vezes. Os hidrogênios se completam sozinhos, porque cada carbono faz quatro ligações. Depois clique em Verificar.',
+ 'Coloque dois carbonos. Depois escolha a ferramenta Ligação e clique no traço entre eles para torná-la dupla.',
+ 'Coloque dois carbonos, com ligação simples. Escolha a peça ó agá e clique em um dos carbonos.',
+ 'Use três carbonos. O número dois no nome diz que o ó agá fica no carbono do meio.',
+ 'Coloque dois carbonos e a peça dupla ó em um carbono da ponta.',
+ 'Use três carbonos e ponha a peça dupla ó no carbono do meio.',
+ 'Use dois carbonos. No mesmo carbono da ponta, coloque a peça dupla ó e também a peça ó agá.',
+ 'Coloque, nesta ordem: um carbono, outro carbono, um oxigênio e mais um carbono. Depois ponha a peça dupla ó no segundo carbono. O oxigênio do meio liga a carbonila ao grupo metila.',
+ 'Coloque um carbono, o oxigênio e outro carbono, nessa ordem. O oxigênio fica no meio, só com as duas ligações.',
+ 'Coloque dois carbonos e a peça ene agá dois em um deles.',
+ 'Use dois carbonos. No carbono da ponta, ponha a peça dupla ó e a peça ene agá dois.',
+ 'Coloque dois carbonos e depois o átomo ene. Use a ferramenta Ligação para fazer uma ligação tripla entre o último carbono e o nitrogênio.',
+ 'Coloque dois carbonos e a peça cê éle em um deles.'
+];
+const OKV=[
+ 'O etano tem dois carbonos, prefixo et, e só ligações simples, infixo an, por isso termina em ano.',
+ 'No eteno a dupla ligação muda o infixo de an para en. Cada carbono ficou com dois hidrogênios.',
+ 'O sufixo ol indica o grupo hidroxila. O carbono com o ó agá perdeu um hidrogênio para manter as quatro ligações.',
+ 'O número dois mostra a posição do ó agá. Esse é um álcool secundário, porque o carbono do ó agá liga a dois outros carbonos.',
+ 'A carbonila na ponta da cadeia, com um hidrogênio, é o aldeído. O sufixo é al.',
+ 'A carbonila entre dois carbonos é a cetona. O sufixo é ona. Essa é a acetona do removedor de esmalte.',
+ 'Carbonila mais hidroxila no mesmo carbono formam o grupo cê ó ó agá, o ácido carboxílico. É o ácido do vinagre.',
+ 'O éster vem de um ácido mais um álcool. A parte etanoato é do ácido, e a parte metila é do álcool.',
+ 'O éter tem oxigênio entre dois carbonos, sem hidrogênio no oxigênio. Ele é isômero do etanol, com a mesma fórmula cê dois agá seis ó.',
+ 'A amina vem da amônia: o nitrogênio faz três ligações. Aqui ele ficou com dois hidrogênios e um carbono.',
+ 'Carbonila ligada a nitrogênio é uma amida. É a mesma ligação que une os aminoácidos nas proteínas.',
+ 'A nitrila tem carbono com ligação tripla ao nitrogênio. Os três traços usam todas as ligações do ene.',
+ 'O cloro substitui um hidrogênio. O haleto orgânico recebe o prefixo cloro no nome.'
+];
+LV.forEach((l,i)=>{l.canon=canon(l.S);l.nc=carbons(l.S);l.hv=HV[i];l.okv=OKV[i]});
+const nsent=s=>String(s).replace(/\s+/g,' ').trim();
+const sents=t=>(nsent(t).match(/[^.!?:]+[.!?:]?/g)||[]).map(x=>x.trim()).filter(Boolean);
+const ART={alcano:'um',alceno:'um',alcino:'um',alcool:'um',aldeido:'um',cetona:'uma',acido:'um',ester:'um',eter:'um',amina:'uma',amida:'uma',nitrila:'uma',haleto:'um'};
+const fv=f=>f.replace(/[₀-₉]/g,d=>' '+NUMW[d.charCodeAt(0)-8320]+' ').replace(/–/g,', ').replace(/=/g,' dupla ').replace(/≡/g,' tripla ').replace(/[()]/g,' ').replace(/Cl/g,' cê éle ').replace(/C/g,' cê ').replace(/H/g,' agá ').replace(/O/g,' ó ').replace(/N/g,' ene ').replace(/\s+/g,' ').replace(/ ,/g,',').trim();
+/* frases faladas: cada item é um áudio pré-gravado */
+const V={
+ intro:i=>[`Fase ${i+1}.`,`Monte ${LV[i].art}.`,...sents(FVOZ[LV[i].fn]),...sents(LV[i].hv)],
+ hint1:i=>[...sents(FVOZ[LV[i].fn]),...sents(LV[i].hv)],
+ reveal:i=>[`A fórmula pedida é: ${fv(fmt(norm(LV[i].S)))}.`,'Ela apareceu no cartão do pedido.','Essa dica reduz uma estrela.'],
+ win:i=>['Muito bem!',`Você montou ${LV[i].art}.`,...sents(LV[i].okv)],
+ empty:()=>['A mesa está vazia.','Escolha a peça cê na paleta e clique na mesa para colocar o primeiro carbono.'],
+ valence:(el,n)=>['Tem um erro de valência.',`O ${EL[el].n} número ${NUMW[n]} está com mais de ${NUMW[EL[el].v]} ligações.`,'Lembre: carbono faz quatro, nitrogênio três, oxigênio duas, hidrogênio e cloro uma.','Remova um grupo ou troque a ligação dupla por simples.'],
+ warn:(el,n)=>['Cuidado!',`O ${EL[el].n} número ${NUMW[n]} está com ligações demais.`,`O ${EL[el].n} faz só ${NUMW[EL[el].v]} ligações.`,'Tire uma peça ou reduza a ligação.'],
+ carbons:(i,bc)=>{const tc=LV[i].nc,d=Math.abs(bc-tc);return['Ainda não.',`Pelo nome, o prefixo ${PFXN[tc]} pede ${NUMW[tc]} carbonos.`,`Mas você tem ${NUMW[bc]}.`,bc<tc?(d===1?'Falta um.':`Faltam ${NUMW[d]}.`):(d===1?'Sobra um.':`Sobram ${NUMW[d]}.`),...sents(LV[i].hv)]},
+ fn:(b,i)=>['Ainda não.',`O que você montou é ${ART[b]} ${FN[b]}.`,`Mas o pedido é ${ART[LV[i].fn]} ${FN[LV[i].fn]}.`,...sents(FVOZ[LV[i].fn]),'Para corrigir:',...sents(LV[i].hv)],
+ pos:(b,k)=>['Quase!',`É ${ART[b]} ${FN[b]} mesmo, mas a posição do grupo está errada.`,`Pelo nome, o grupo fica no carbono número ${NUMW[k]}, contando da ponta mais próxima.`],
+ bond:()=>['Quase! A função está certa, mas confira as ligações entre os carbonos.','Veja o infixo do nome: an é simples, en é dupla, in é tripla.']
+};
+V.all=()=>{
+  const S=new Set(),add=a=>a.forEach(x=>S.add(nsent(x)));
+  LV.forEach((l,i)=>{
+    add(V.intro(i));add(V.hint1(i));add(V.reveal(i));add(V.win(i));
+    for(let bc=0;bc<=MAXA;bc++)if(bc!==l.nc)add(V.carbons(i,bc));
+    Object.keys(FN).forEach(b=>{if(b!==l.fn)add(V.fn(b,i))});
+  });
+  Object.keys(FN).forEach(b=>{for(let k=1;k<=3;k++)add(V.pos(b,k))});
+  add(V.empty());add(V.bond());
+  ['C','O','N'].forEach(el=>{for(let n=1;n<=MAXA;n++){add(V.valence(el,n));add(V.warn(el,n))}});
+  return[...S];
+};
+
+/* ===================== ESTADO ===================== */
+let li=0,M={atoms:[],bonds:[]},tool='C',wrong=0,revealed=false,hints=0,done=false;
+let SAVE={stars:[]};
+try{const v=JSON.parse(localStorage.getItem('mesa3d-v1')||'null');if(v&&Array.isArray(v.stars))SAVE=v}catch(e){}
+const persist=()=>{try{localStorage.setItem('mesa3d-v1',JSON.stringify(SAVE))}catch(e){}};
+const $=id=>document.getElementById(id);
+const fresh=new Set();
+
+/* ===================== ÍCONES E MENUS ===================== */
+const svg=p=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const IC={
+ lock:svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
+ play:svg('<path d="M7 4.5l13 7.5-13 7.5z"/>'),
+ arrow:svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+ replay:svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
+ grid:svg('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
+ x:svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+ rotate:svg('<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'),
+ vol:svg('<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>'),
+ mute:svg('<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/>'),
+ book:svg('<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>'),
+ logo:'<svg viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="3"/><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M10.5 9.1 7.5 14.4M13.5 9.1l3 5.3M9 17h6"/></svg>'
+};
+/* cor da função = cor do átomo que a define (O vermelho, N azul, Cl verde) */
+const FAM={alcano:'hc',alceno:'hc',alcino:'hc',alcool:'ox',aldeido:'ox',cetona:'ox',acido:'ox',ester:'ox',eter:'ox',amina:'ni',amida:'ni',nitrila:'ni',haleto:'cl'};
+let started=false;
+const starHtml=n=>[0,1,2].map(k=>`<span class="${k<n?'':'off'}">★</span>`).join('');
+
+/* ===================== VOZ ===================== */
+/* áudios neurais pré-gravados (frase -> mp3 em base64) */
+const AUD=/*AUDIO_JSON*/{}/*END_AUDIO*/;
+const MISS=new Set();
+let voiceOn=true,lastParts=[],voice=null,lastWarn=0,playId=0,curAudio=null;
+function pickVoice(){
+  try{const vs=speechSynthesis.getVoices().filter(v=>/^pt/i.test(v.lang));voice=vs.find(v=>/natural|neural|online/i.test(v.name))||vs.find(v=>/pt[-_]BR/i.test(v.lang))||vs[0]||null}catch(e){}
+}
+try{pickVoice();speechSynthesis.onvoiceschanged=pickVoice}catch(e){}
+function stopVoice(){playId++;try{speechSynthesis.cancel()}catch(e){}if(curAudio){try{curAudio.pause()}catch(e){}curAudio=null}$('av').classList.remove('talk')}
+function ttsOne(s,cb){try{const u=new SpeechSynthesisUtterance(s);u.lang='pt-BR';u.rate=.96;if(voice)u.voice=voice;u.onend=u.onerror=()=>cb();speechSynthesis.speak(u)}catch(e){cb()}}
+function playParts(parts){
+  if(!voiceOn||!parts||!parts.length)return;
+  stopVoice();const id=playId;let i=0;$('av').classList.add('talk');
+  const next=()=>{
+    if(id!==playId)return;
+    if(i>=parts.length){$('av').classList.remove('talk');return}
+    const s=nsent(parts[i++]),b=AUD[s];
+    if(b){
+      const a=new Audio('data:audio/mpeg;base64,'+b);curAudio=a;
+      a.onended=()=>setTimeout(next,120);a.onerror=()=>ttsOne(s,next);
+      const p=a.play();if(p&&p.catch)p.catch(()=>ttsOne(s,next));
+    }else{MISS.add(s);ttsOne(s,next)}
+  };
+  next();
+}
+function say(voz,text,cls){
+  const parts=Array.isArray(voz)?voz:sents(voz);
+  lastParts=parts;
+  const b=$('bub');b.textContent=text||parts.join(' ');b.className=cls||'';
+  playParts(parts);
+}
+
+/* ===================== TABELA ===================== */
+const TAB=[
+ ['Alcano','C–C simples','-ano','CH₃–CH₃ (etano)'],['Alceno','C=C','-eno','CH₂=CH₂ (eteno)'],['Alcino','C≡C','-ino','CH≡CH (etino)'],
+ ['Álcool','–OH em C saturado','-ol','CH₃–CH₂–OH (etanol)'],['Aldeído','–CHO (ponta)','-al','CH₃–CHO (etanal)'],['Cetona','–CO– (meio)','-ona','CH₃–CO–CH₃ (propanona)'],
+ ['Ácido carboxílico','–COOH','ácido -óico','CH₃–COOH (ác. etanoico)'],['Éster','–COO– entre C','-oato de -ila','CH₃–CO–O–CH₃ (etanoato de metila)'],
+ ['Éter','–O– entre C','alcóxi-alcano','CH₃–O–CH₃ (metoxi-metano)'],['Amina','N ligado a C','-amina','CH₃–CH₂–NH₂ (etilamina)'],
+ ['Amida','–CO–N','-amida','CH₃–CO–NH₂ (etanamida)'],['Nitrila','–C≡N','-nitrila','CH₃–C≡N (etanonitrila)'],['Haleto','–Cl, –Br','cloro-, bromo-','CH₃–CH₂–Cl (cloroetano)']
+];
+function renderSide(){
+  const hl=FROW[LV[li].fn];
+  $('side').innerHTML=`<h3 style="margin-top:0">Valências (ligações de cada átomo)</h3>
+   <table class="tb"><tr><th>Átomo</th><th>Faz</th><th>Cor</th></tr>
+   <tr><td>C carbono</td><td class="m">4 ligações</td><td>cinza</td></tr>
+   <tr><td>O oxigênio</td><td class="m">2 ligações</td><td>vermelho</td></tr>
+   <tr><td>N nitrogênio</td><td class="m">3 ligações</td><td>azul</td></tr>
+   <tr><td>H hidrogênio</td><td class="m">1 ligação</td><td>branco (automático)</td></tr>
+   <tr><td>Cl cloro</td><td class="m">1 ligação</td><td>verde</td></tr></table>
+   <div class="note"><b>Nome = prefixo + infixo + sufixo.</b> Prefixo: nº de carbonos. Infixo: ligações. Sufixo: função.</div>
+   <h3>Prefixos</h3><div class="pf">${[['met',1],['et',2],['prop',3],['but',4],['pent',5],['hex',6],['hept',7],['oct',8],['non',9],['dec',10]].map(x=>`<div><b>${x[0]}</b>${x[1]} C</div>`).join('')}</div>
+   <h3>Infixos</h3><table class="tb"><tr><th>Ligações</th><th>Infixo</th></tr><tr><td>só simples</td><td class="m">an</td></tr><tr><td>1 dupla</td><td class="m">en</td></tr><tr><td>1 tripla</td><td class="m">in</td></tr></table>
+   <h3>Funções e sufixos</h3><table class="tb"><tr><th>Função</th><th>Grupo</th><th>Sufixo</th><th>Exemplo</th></tr>
+   ${TAB.map(r=>`<tr class="${r[0]===hl?'hl':''}"><td>${r[0]}</td><td class="m">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</table>
+   <h3>Peças</h3><div class="note"><b>C, O, N</b>: átomos da cadeia (clique na mesa). <b>–OH, =O, –NH₂, –Cl</b>: grupos (clique em um átomo). <b>Ligação ⟳</b>: clique no traço para simples, dupla ou tripla. Os hidrogênios completam sozinhos.</div>`;
+}
+
+/* ===================== OPERAÇÕES NA MESA ===================== */
+function changed(key){
+  if(key)fresh.add(key);
+  rebuild();updateCur();
+  const ov=overflow(M);
+  if(ov.length&&Date.now()-lastWarn>4000){
+    lastWarn=Date.now();
+    const i=ov[0],a=M.atoms[i];
+    say(V.warn(a.el,i+1),`Átomo ${i+1} (${a.el}) passou do limite de ${EL[a.el].v} ligações. Tire uma peça ou reduza a ligação.`,'bad');
+  }
+}
+function addAtom(el){if(M.atoms.length>=MAXA){$('bub').textContent='A mesa comporta no máximo 5 átomos na cadeia.';return}M.atoms.push({el,subs:[]});if(M.atoms.length>1)M.bonds.push(1);changed('a'+(M.atoms.length-1))}
+function setEl(i,el){M.atoms[i].el=el;changed('a'+i)}
+function addSub(i,g){M.atoms[i].subs.push(g);changed('s'+i+'_'+(M.atoms[i].subs.length-1))}
+function removeAtom(i){M.atoms.splice(i,1);if(M.bonds.length){M.bonds.splice(Math.min(i,M.bonds.length-1),1)}changed()}
+function removeSub(i,j){M.atoms[i].subs.splice(j,1);changed()}
+function cycleBond(i){M.bonds[i]=M.bonds[i]%3+1;changed()}
+function updateCur(){
+  if(!M.atoms.length){$('cur').textContent='Mesa vazia';return}
+  $('cur').textContent='Sua fórmula: '+fmt(norm(M));
+}
+function clearTable(){M={atoms:[],bonds:[]};changed()}
+
+/* ===================== VERIFICAÇÃO ===================== */
+function check(){
+  if(done)return;
+  const T=LV[li];
+  if(!M.atoms.length){say(V.empty(),'Mesa vazia: coloque o primeiro carbono.','bad');return}
+  const ov=overflow(M);
+  if(ov.length){
+    const i=ov[0],a=M.atoms[i];wrong++;
+    say(V.valence(a.el,i+1),`Erro de valência no átomo ${i+1} (${a.el}). C faz 4, N faz 3, O faz 2, H e Cl fazem 1.`,'bad');return;
+  }
+  const N=norm(M),c=canon(M);
+  if(c===T.canon){win();return}
+  wrong++;
+  const built=detect(M),bc=carbons(M),tc=T.nc,myF=fmt(N);
+  let parts,txt;
+  if(bc!==tc){
+    const dif=Math.abs(bc-tc);
+    parts=V.carbons(li,bc);
+    txt=`Você montou ${myF}. O prefixo "${PFXN[tc]}" pede ${tc} C, e você tem ${bc}. ${bc<tc?'Faltam':'Sobram'} ${dif}. ${T.how}`;
+  }else if(built!==T.fn){
+    parts=V.fn(built,li);
+    txt=`Você montou ${myF}, que é um ${FN[built]}. O pedido é ${FN[T.fn]}. ${T.how}`;
+  }else{
+    const tn=norm(T.S);
+    let k=-1;tn.atoms.forEach((a,i)=>{if(k<0&&(a.subs.length||a.el!=='C'))k=Math.min(i,tn.atoms.length-1-i)+1});
+    const bondsDiff=JSON.stringify(N.bonds)!==JSON.stringify(tn.bonds)&&JSON.stringify(N.bonds)!==JSON.stringify(tn.bonds.slice().reverse());
+    if(bondsDiff){parts=V.bond();txt='Função certa, mas as ligações não batem. Confira o infixo (an, en, in).'}
+    else{parts=V.pos(built,k>0?Math.min(k,3):1);txt=`Função certa, posição errada. No pedido, o grupo fica no carbono ${k>0?k:'indicado no nome'}.`}
+  }
+  say(parts,txt,'bad');beep(140,.25,'sawtooth');
+  $('ps').textContent=starStr(Math.max(1,3-wrong-(revealed?1:0)));
+}
+function win(){
+  done=true;
+  const T=LV[li];
+  const stars=Math.max(1,3-wrong-(revealed?1:0));
+  SAVE.stars[li]=Math.max(SAVE.stars[li]||0,stars);persist();
+  say(V.win(li),`Correto! ${T.n}: ${fmt(norm(M))}. ${T.ok}`,'ok');
+  [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.18),i*120));
+  confetti();
+  setTimeout(()=>{
+    const last=li===LV.length-1;
+    showCard(`<div class="eyebrow">Fase ${li+1} concluída</div>
+     <h2>${last?'Laboratório dominado!':'Composto sintetizado!'}</h2>
+     <div class="bigstars" role="img" aria-label="${stars} de 3 estrelas">${[0,1,2].map(k=>`<span class="${k<stars?'on':''}" style="--d:${k}">★</span>`).join('')}</div>
+     <div class="result"><div class="nm">${T.n}</div><div class="fm">${fmt(norm(M))}</div><span class="chip k-${FAM[T.fn]}">${FN[T.fn]}</span></div>
+     <p class="exp">${T.ok}</p>
+     ${stars<3?'<p class="tipline">Para ganhar 3 estrelas: acerte sem erros e sem revelar a fórmula.</p>':''}
+     <div class="btns"><button class="go" data-a="${last?'menu':'next'}">${last?'Ver fases':'Próxima fase'} ${IC.arrow}</button><button class="ghost" data-a="again">${IC.replay} Refazer</button>${last?'':`<button class="ghost" data-a="menu">${IC.grid} Fases</button>`}</div>`,'sm win');
+  },2600);
+}
+const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+function hint(){
+  const T=LV[li];hints++;
+  if(hints===1){say(V.hint1(li),`Dica: ${T.how}`)}
+  else{
+    revealed=true;$('rfo').textContent=fmt(norm(T.S));
+    say(V.reveal(li),`A fórmula pedida: ${fmt(norm(T.S))} (−1 estrela)`);
+    $('ps').textContent=starStr(Math.max(1,3-wrong-1));
+  }
+}
+
+/* ===================== FLUXO DE FASES ===================== */
+function startLevel(i,first){
+  li=i;const T=LV[i];done=false;wrong=0;revealed=false;hints=0;M={atoms:[],bonds:[]};
+  started=true;$('hud').hidden=false;
+  $('pl').textContent=`Fase ${i+1}/${LV.length}`;$('ps').textContent=starStr(3);
+  $('rn').textContent=T.n;$('rf').textContent='Função: '+FN[T.fn];$('rfo').textContent='';
+  $('ov').classList.remove('on');
+  renderSide();fresh.clear();changed();
+  say(V.intro(i),`Fase ${i+1}: monte ${T.n} (${FN[T.fn]}). ${T.how}`);
+}
+function showCard(h,cls){const c=$('card');c.className='card '+(cls||'');c.innerHTML=h;$('ov').classList.add('on')}
+function menu(){
+  const got=i=>SAVE.stars[i]||0,open=i=>i===0||got(i-1)>0;
+  const doneN=LV.filter((l,i)=>got(i)>0).length,starsN=LV.reduce((s,l,i)=>s+got(i),0);
+  const nx=LV.findIndex((l,i)=>open(i)&&!got(i));
+  const cards=LV.map((l,i)=>{
+    const s=got(i),o=open(i),st=s?'done':!o?'lock':i===nx?'next':'open';
+    const top=!o?`<span class="lk">${IC.lock}</span>`:st==='next'?`<span class="tag">${IC.play}Jogar</span>`:`<span class="st">${starHtml(s)}</span>`;
+    const al=`Fase ${i+1}: ${l.n}`+(!o?' (bloqueada)':s?` (${s} de 3 estrelas)`:'');
+    return `<button class="lvl ${st}" data-lv="${i}" style="--d:${i}"${o?'':' disabled'} aria-label="${al}"><span class="top"><span class="num">${String(i+1).padStart(2,'0')}</span>${top}</span><span class="nm">${l.n}</span><span class="chip k-${FAM[l.fn]}">${FN[l.fn]}</span></button>`;
+  }).join('');
+  const cta=nx<0?'<span class="msg">Todas as fases concluídas! Refaça para ganhar mais estrelas.</span>'
+    :`<button class="go" data-lv="${nx}">${doneN?`Continuar: Fase ${nx+1}`:'Começar'} ${IC.arrow}</button>`;
+  showCard(`${started?`<button class="x" data-a="close" aria-label="Fechar menu" title="Fechar (Esc)">${IC.x}</button>`:''}
+   <div class="hero"><div class="logo" aria-hidden="true">${IC.logo}</div><h2>Mesa de Síntese 3D</h2>
+   <p>Monte moléculas em 3D a partir do nome. O Professor Carbono fala com você e explica o que está errado e como corrigir.</p></div>
+   <div class="prog"><div class="meta"><div class="nums"><span>Fases <b>${doneN}/${LV.length}</b></span><span>Estrelas <b>${starsN}/${LV.length*3}</b></span></div>
+   <div class="bar"><i style="width:${Math.round(doneN/LV.length*100)}%"></i></div></div>${cta}</div>
+   <div class="sec"><span>Escolha a fase</span><span class="legend"><span class="k-hc">hidrocarboneto</span><span class="k-ox">com oxigênio</span><span class="k-ni">com nitrogênio</span><span class="k-cl">com cloro</span></span></div>
+   <div class="lv">${cards}</div>
+   <div class="tips"><div class="tip">${IC.rotate}<span>Arraste na mesa para girar a câmera.</span></div>
+   <div class="tip">${IC.vol}<span>O professor explica por voz. Se não ouvir, confira o som do aparelho.</span></div>
+   <div class="tip">${IC.book}<span>Prefixos, infixos e sufixos ficam no botão Tabela.</span></div></div>`,'menu');
+}
+
+/* ===================== ÁUDIO (efeitos) ===================== */
+let AC=null;
+function beep(f,d,t,v){
+  try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(),g=AC.createGain();o.type=t||'sine';o.frequency.value=f;g.gain.value=v||.05;
+    o.connect(g);g.connect(AC.destination);g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.start();o.stop(AC.currentTime+d);}catch(e){}
+}
+
+/* ===================== 3D ===================== */
+const view=$('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+view.insertBefore(renderer.domElement,view.firstChild);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b1626);scene.fog=new THREE.Fog(0x0b1626,14,30);
+const camera=new THREE.PerspectiveCamera(45,1,.1,100);camera.position.set(0,3.4,8.4);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.set(0,.8,0);controls.enablePan=false;controls.minDistance=5;controls.maxDistance=12;
+controls.minPolarAngle=.45;controls.maxPolarAngle=1.45;controls.minAzimuthAngle=-1.1;controls.maxAzimuthAngle=1.1;controls.enableDamping=true;controls.update();
+scene.add(new THREE.HemisphereLight(0xcfe3ff,0x24334a,.85));
+const dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(4,8,5);dl.castShadow=true;dl.shadow.mapSize.set(1024,1024);
+Object.assign(dl.shadow.camera,{left:-8,right:8,top:6,bottom:-6,near:1,far:25});scene.add(dl);
+const pl2=new THREE.PointLight(0xffb347,.5,14);pl2.position.set(-5,3,3);scene.add(pl2);
+
+/* sala: piso, parede, prateleira, mesa */
+function tex(draw,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t}
+const floorT=tex((x,w,h)=>{for(let i=0;i<8;i++)for(let j=0;j<8;j++){x.fillStyle=(i+j)%2?'#16273d':'#1b304a';x.fillRect(i*w/8,j*h/8,w/8,h/8)}},256,256);floorT.wrapS=floorT.wrapT=THREE.RepeatWrapping;floorT.repeat.set(6,6);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({map:floorT,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.position.y=-2.1;floor.receiveShadow=true;scene.add(floor);
+const wall=new THREE.Mesh(new THREE.PlaneGeometry(40,14),new THREE.MeshStandardMaterial({color:0x13263f,roughness:1}));wall.position.set(0,4.9,-6);scene.add(wall);
+[[-6,2.6],[0,2.6],[6,2.6]].forEach(([x,y])=>{
+  const sh=new THREE.Mesh(new THREE.BoxGeometry(4.2,.12,.9),new THREE.MeshStandardMaterial({color:0x5b4630}));sh.position.set(x,y,-5.5);scene.add(sh);
+  [0x4aa3ff,0xff9f4a,0x5fd38d].forEach((col,k)=>{
+    const f=new THREE.Mesh(new THREE.CylinderGeometry(.18,.42,.9,16),new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:.55,roughness:.2}));
+    f.position.set(x-1.3+k*1.3,y+.52,-5.5);scene.add(f);
+  });
+});
+const woodT=tex((x,w,h)=>{x.fillStyle='#8a6038';x.fillRect(0,0,w,h);for(let i=0;i<60;i++){x.fillStyle=`rgba(${60+Math.random()*40},${35+Math.random()*25},15,.25)`;x.fillRect(0,Math.random()*h,w,1+Math.random()*2)}},512,256);
+const tableTop=new THREE.Mesh(new THREE.BoxGeometry(14,.5,6.4),new THREE.MeshStandardMaterial({map:woodT,roughness:.7}));tableTop.position.y=-.25;tableTop.receiveShadow=true;tableTop.userData={type:'table'};scene.add(tableTop);
+[[-6.5,-2.9],[6.5,-2.9],[-6.5,2.9],[6.5,2.9]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.5,1.9,.5),new THREE.MeshStandardMaterial({color:0x3b4552,metalness:.6,roughness:.4}));l.position.set(x,-1.2,z);l.castShadow=true;scene.add(l)});
+const tray=new THREE.Mesh(new THREE.BoxGeometry(9,.12,2.6),new THREE.MeshStandardMaterial({color:0xcfe3f5,transparent:true,opacity:.35,roughness:.15,metalness:.1}));tray.position.y=.06;scene.add(tray);
+
+/* molécula */
+const mol=new THREE.Group();scene.add(mol);
+const sphGeo=new THREE.SphereGeometry(1,28,20),cylGeo=new THREE.CylinderGeometry(1,1,1,10);
+const mats={};Object.keys(EL).forEach(k=>mats[k]=new THREE.MeshStandardMaterial({color:EL[k].col,roughness:.35,metalness:.05}));
+const matBad=new THREE.MeshStandardMaterial({color:0xff3b3b,emissive:0xff2020,emissiveIntensity:.6,roughness:.35});
+const bondMat=new THREE.MeshStandardMaterial({color:0xb9c3d0,roughness:.4,metalness:.3});
+const hitMat=new THREE.MeshBasicMaterial({visible:false});
+const labelCache={};
+function label(t){
+  if(!labelCache[t])labelCache[t]=new THREE.SpriteMaterial({map:tex((x,w,h)=>{x.font='bold 84px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#fff';x.strokeStyle='#0008';x.lineWidth=8;x.strokeText(t,w/2,h/2+4);x.fillText(t,w/2,h/2+4)},128,128),depthTest:false,transparent:true});
+  const s=new THREE.Sprite(labelCache[t]);s.scale.set(.55,.55,1);s.renderOrder=10;return s;
+}
+let SP=1.7,vmode='';
+const SLOTX=i=>(i-2)*SP,Y0=.95;
+let pickables=[];let animObjs=[];let marker=null;
+const SITES=[new THREE.Vector3(0,.85,.55),new THREE.Vector3(0,.85,-.55),new THREE.Vector3(0,-.85,.55),new THREE.Vector3(0,-.85,-.55),new THREE.Vector3(0,.2,1)];
+function bondGroup(a,b,order,r,mat){
+  const g=new THREE.Group(),dir=b.clone().sub(a),len=dir.length();dir.normalize();
+  let perp=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,0,1));if(perp.length()<.1)perp.set(0,1,0);perp.normalize();
+  (order===1?[0]:order===2?[-.09,.09]:[-.16,0,.16]).forEach(o=>{
+    const m=new THREE.Mesh(cylGeo,mat||bondMat);m.scale.set(r,len,r);
+    m.position.copy(a).add(b).multiplyScalar(.5).addScaledVector(perp,o);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);m.castShadow=true;g.add(m);
+  });
+  return g;
+}
+function addSphere(el,p,key,data,over){
+  const E=EL[el],m=new THREE.Mesh(sphGeo,over?matBad:mats[el]);
+  m.position.copy(p);m.userData=Object.assign({base:E.r,born:fresh.has(key)?performance.now():-1e9},data||{});
+  m.scale.setScalar(m.userData.born>0?.01:E.r);m.castShadow=true;mol.add(m);animObjs.push(m);
+  if(data)pickables.push(m);
+  return m;
+}
+function rebuild(){
+  for(let i=mol.children.length-1;i>=0;i--){const c=mol.children[i];mol.remove(c)}
+  pickables=[tableTop];animObjs=[];marker=null;
+  const n=M.atoms.length;
+  for(let i=0;i<n;i++){
+    const a=M.atoms[i],p=new THREE.Vector3(SLOTX(i),Y0,0),over=usedOf(M,i)>EL[a.el].v;
+    const sp=addSphere(a.el,p,'a'+i,{type:'atom',i},over);
+    if(a.el!=='H'){const lb=label(a.el);lb.position.copy(p);mol.add(lb)}
+    if(i<n-1){
+      const q=new THREE.Vector3(SLOTX(i+1),Y0,0);
+      mol.add(bondGroup(p,q,M.bonds[i],.07));
+      const hit=new THREE.Mesh(cylGeo,hitMat);hit.scale.set(.3,SP,.3);hit.position.copy(p).add(q).multiplyScalar(.5);hit.rotation.z=Math.PI/2;hit.userData={type:'bond',i};mol.add(hit);pickables.push(hit);
+    }
+    /* grupos e hidrogênios */
+    const sites=[];
+    if(i===0)sites.push(new THREE.Vector3(-1,.35,0));
+    if(i===n-1)sites.push(new THREE.Vector3(1,.35,0));
+    SITES.forEach(s=>sites.push(s));
+    const items=a.subs.map((g,j)=>({g,j}));
+    const free=Math.max(0,EL[a.el].v-usedOf(M,i));
+    for(let k=0;k<free;k++)items.push({g:'H'});
+    items.forEach((it,k)=>{
+      const d=sites[k%sites.length].clone().normalize(),L=it.g==='H'?.95:1.1,q=p.clone().addScaledVector(d,L);
+      if(it.g==='H'){
+        mol.add(bondGroup(p,q,1,.045));addSphere('H',q,'h',null);
+      }else{
+        const S=SUBS[it.g];
+        mol.add(bondGroup(p,q,S.cost>=3?3:S.cost,.06));
+        const so=addSphere(S.el,q,'s'+i+'_'+it.j,{type:'sub',i,j:it.j});
+        if(S.el!=='Cl'||true){const lb=label(S.el);lb.position.copy(q);lb.scale.set(.5,.5,1);mol.add(lb)}
+        const angs=S.h===1?[.7]:S.h===2?[.55,-.55]:[];
+        angs.forEach(an=>{
+          const dd=d.clone().applyAxisAngle(new THREE.Vector3(0,0,1),an*(d.x>=0?1:-1)*(Math.abs(d.y)>.5?1:1));
+          const hq=q.clone().addScaledVector(dd,.8);
+          mol.add(bondGroup(q,hq,1,.04));addSphere('H',hq,'h',null);
+        });
+      }
+    });
+  }
+  if(n<MAXA){
+    const mk2=new THREE.Mesh(new THREE.TorusGeometry(.5,.05,10,32),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.8}));
+    mk2.position.set(SLOTX(n),Y0,0);mk2.userData={type:'slot'};mol.add(mk2);pickables.push(mk2);marker=mk2;
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(.5,24),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.12,side:THREE.DoubleSide}));disc.position.copy(mk2.position);disc.userData={type:'slot'};mol.add(disc);pickables.push(disc);
+  }
+  fresh.clear();
+}
+/* confete */
+let conf=[];
+function confetti(){
+  for(let i=0;i<90;i++){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.04),new THREE.MeshBasicMaterial({color:[0xffb347,0x5fd38d,0x4aa3ff,0xff7ac8][i%4]}));
+    m.position.set((Math.random()-.5)*4,2.2,(Math.random()-.5)*2);m.userData={v:new THREE.Vector3((Math.random()-.5)*.12,.08+Math.random()*.1,(Math.random()-.5)*.08),l:140};scene.add(m);conf.push(m);
+  }
+}
+/* picking */
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
+function pick(ev){
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse.x=((ev.clientX-r.left)/r.width)*2-1;mouse.y=-((ev.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(mouse,camera);
+  const h=ray.intersectObjects(pickables,false);
+  return h.length?h[0].object.userData:null;
+}
+let down=null;
+renderer.domElement.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY}});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!down||done)return;
+  const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);down=null;
+  if(moved>6)return;
+  onClick(pick(e));
+});
+function onClick(u){
+  if(!u)return;
+  const t=tool;
+  if(t==='C'||t==='O'||t==='N'){
+    if(u.type==='atom')setEl(u.i,t);
+    else if(u.type==='slot'||u.type==='table')addAtom(t);
+  }else if(SUBS[t]){
+    if(u.type==='atom')addSub(u.i,t);
+    else $('bub').textContent='Para colocar um grupo, clique em um átomo da cadeia.';
+  }else if(t==='bond'){
+    if(u.type==='bond')cycleBond(u.i);
+    else $('bub').textContent='Clique no traço entre dois átomos para mudar a ligação (simples, dupla, tripla).';
+  }else if(t==='del'){
+    if(u.type==='atom')removeAtom(u.i);
+    else if(u.type==='sub')removeSub(u.i,u.j);
+    else if(u.type==='bond'){M.bonds[u.i]=1;changed()}
+  }
+  beep(520,.06,'triangle',.04);
+}
+/* tamanho e loop */
+function resize(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);
+  const m=w/h<1.1?'p':'l';
+  if(m!==vmode){vmode=m;SP=m==='p'?1.15:1.7;camera.fov=m==='p'?60:45;const d=m==='p'?10.2:8.8;camera.position.set(0,d*.375,d*.927);controls.update();try{rebuild()}catch(e){}}
+camera.aspect=w/h;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(view);window.addEventListener('resize',resize);
+const ease=t=>{const c=1.70158;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
+function loop(){
+  requestAnimationFrame(loop);
+  const now=performance.now();
+  animObjs.forEach(m=>{const t=Math.min(1,(now-m.userData.born)/350);m.scale.setScalar(m.userData.base*(m.userData.born>0?Math.max(.01,ease(t)):1))});
+  if(marker){const s=1+.08*Math.sin(now*.005);marker.scale.set(s,s,1)}
+  conf.forEach(m=>{m.position.add(m.userData.v);m.userData.v.y-=.0035;m.rotation.x+=.1;m.rotation.y+=.07;m.userData.l--;if(m.userData.l<=0){scene.remove(m)}});
+  conf=conf.filter(m=>m.userData.l>0);
+  controls.update();renderer.render(scene,camera);
+}
+
+/* ===================== EVENTOS DA INTERFACE ===================== */
+$('tbar').addEventListener('click',e=>{
+  const b=e.target.closest('.tool');if(!b)return;
+  tool=b.dataset.t;document.querySelectorAll('.tool').forEach(x=>x.setAttribute('aria-pressed',x===b));
+});
+$('bv').onclick=check;$('bh').onclick=hint;$('br').onclick=()=>{playParts(lastParts)};
+function setVoiceBtn(){
+  const b=$('bs'),t=voiceOn?'Voz ligada (clique para desligar)':'Voz desligada (clique para ligar)';
+  b.setAttribute('aria-pressed',voiceOn);b.innerHTML=voiceOn?IC.vol:IC.mute;b.title=t;b.setAttribute('aria-label',t);
+}
+const syncSide=()=>$('bt').setAttribute('aria-pressed',$('side').classList.contains('on'));
+$('bs').onclick=()=>{voiceOn=!voiceOn;setVoiceBtn();if(!voiceOn)stopVoice();else playParts(lastParts)};
+$('bc').onclick=()=>{if(!done)clearTable()};
+$('bt').onclick=()=>{$('side').classList.toggle('on');syncSide()};
+$('bm').onclick=menu;
+$('card').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.lv!==undefined)startLevel(+b.dataset.lv);
+  else if(b.dataset.a==='next')startLevel(li+1);
+  else if(b.dataset.a==='again')startLevel(li);
+  else if(b.dataset.a==='menu')menu();
+  else if(b.dataset.a==='close')$('ov').classList.remove('on');
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&started&&$('ov').classList.contains('on')&&$('card').classList.contains('menu'))$('ov').classList.remove('on');
+});
+window.__game={V,AUD,MISS,get lastParts(){return lastParts},get M(){return M},startLevel,check,addAtom,addSub,cycleBond,setEl,say,get li(){return li},LV,canon,fmt,norm,detect};
+
+resize();loop();
+$('side').classList.toggle('on',window.innerWidth>780);
+syncSide();setVoiceBtn();
+renderSide();menu();
+$('bub').textContent='Escolha uma fase para começar. O professor vai explicar tudo por voz.';
+</script>
+</body>
+</html>
